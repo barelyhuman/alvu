@@ -42,13 +42,21 @@ func main() {
 	pagesPath := path.Join(*basePathFlag, "pages")
 	publicPath := path.Join(*basePathFlag, "public")
 	headFilePath := path.Join(pagesPath, "_head.html")
+	tailFilePath := path.Join(pagesPath, "_tail.html")
 	outPath := path.Join(*outPathFlag)
 	hooksPath := path.Join(*basePathFlag, *hooksPathFlag)
 
 	headContent, err := os.ReadFile(headFilePath)
 	if err != nil {
 		if err == fs.ErrNotExist {
-			log.Println("no _head.html found")
+			log.Println("no _head.html found,skipping")
+		}
+	}
+
+	tailContent, err := os.ReadFile(tailFilePath)
+	if err != nil {
+		if err == fs.ErrNotExist {
+			log.Println("no _tail.html found, skipping")
 		}
 	}
 
@@ -80,6 +88,7 @@ func main() {
 			destPath:    destFilePath,
 			name:        fileName,
 			headContent: headContent,
+			tailContent: tailContent,
 			hooks:       hooksToUse,
 		})
 	}
@@ -143,9 +152,11 @@ func CollectHooks(basePath, hooksBasePath string) (hooks []*lua.LState) {
 		yamlLib.Preload(lState)
 		stringsLib.Preload(lState)
 		lState.PreloadModule("http", ghttp.NewHttpModule(&http.Client{}).Loader)
-
-		absPath, _ := filepath.Rel(basePath, hooksBasePath)
-		lState.SetGlobal("workingdir", lua.LString(absPath))
+		if basePath == "." {
+			lState.SetGlobal("workingdir", lua.LString(""))
+		} else {
+			lState.SetGlobal("workingdir", lua.LString(basePath))
+		}
 
 		hookPath := path.Join(hooksBasePath, pathInfo.Name())
 
@@ -179,6 +190,7 @@ type AlvuFile struct {
 	content          []byte
 	writeableContent []byte
 	headContent      []byte
+	tailContent      []byte
 	hooks            []*lua.LState
 }
 
@@ -287,6 +299,7 @@ func (a *AlvuFile) ProcessFile() error {
 
 	targetFile := strings.Replace(path.Join(a.destPath), a.name, string(name), 1)
 	f, _ := os.Create(targetFile)
+	defer f.Sync()
 
 	var toHtml bytes.Buffer
 	mdProcessor.Convert(content, &toHtml)
@@ -302,6 +315,8 @@ func (a *AlvuFile) ProcessFile() error {
 		Data:   data,
 		Extras: extras,
 	})
+
+	f.Write(a.headContent)
 
 	return nil
 }

@@ -10,3 +10,6 @@ build:
 	
 demo: 
 	go run . --path lab
+
+docs: build 
+	./alvu --path="docs"

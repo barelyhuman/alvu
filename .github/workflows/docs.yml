@@ -1,5 +1,9 @@
 name: Docs
-on: [push]
+on:
+  push:
+    branches:
+      - main
+      
 jobs:
   build-docs:
     concurrency: ci-${{ github.ref }}

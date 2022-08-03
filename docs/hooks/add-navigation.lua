@@ -25,7 +25,7 @@ function Writer(filedata)
 
     table.insert(index, 1, {
         name = "..",
-        slug = "/"
+        slug = "index"
     })
 
     local source_data = json.decode(filedata)

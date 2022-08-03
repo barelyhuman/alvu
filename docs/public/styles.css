@@ -8,24 +8,18 @@
   --primary-text: #111111;
   --secondary-bg: #f1f1f8;
   --secondary-text: #9b9b9b;
-  --hover-bg: #dde1e5;
-  --active-bg: #cdcfd2;
   --underline-bg: #aaafb5;
-  --translucent: rgba(249, 250, 251, 0.8);
-  --transparent: rgba(249, 250, 251, 0);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --primary-bg: #141516;
-    --primary-text: #ebebeb;
-    --secondary-bg: #30373a;
+    --primary-bg: #191815;
+    --primary-text: rgba(166, 166, 166, 1);
+    --secondary-bg: #333;
     --secondary-text: #a4a7a9;
     --hover-bg: #474c50;
     --active-bg: #626569;
     --underline-bg: #6d7176;
-    --translucent: rgba(47, 52, 55, 0.8);
-    --transparent: rgba(47, 52, 55, 0);
   }
 }
 

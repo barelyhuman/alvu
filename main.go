@@ -327,7 +327,7 @@ func (a *AlvuFile) ProcessFile() error {
 		Extras: extras,
 	})
 
-	f.Write(a.headContent)
+	f.Write(a.tailContent)
 
 	return nil
 }

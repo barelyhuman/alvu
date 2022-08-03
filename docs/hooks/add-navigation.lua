@@ -33,8 +33,9 @@ function Writer(filedata)
     local template = [[
 <header class="container">
 <nav>
+{{$baseurl:=.Meta.BaseURL}}
 {{range .Data.index}}
-    <a href={{.slug}}>{{.name}}</a>
+    <a href={{print $baseurl .slug}}>{{.name}}</a>
 {{end}}
 </nav>
 </header>

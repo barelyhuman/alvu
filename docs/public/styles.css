@@ -1,23 +1,40 @@
 /* base style from https://oaklang.org/ */
 /* modified for usecase accordingly */
 
+:root {
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Menlo", monospace;
+  --primary-bg: #fdfeff;
+  --primary-text: #111111;
+  --secondary-bg: #f1f1f8;
+  --secondary-text: #9b9b9b;
+  --hover-bg: #dde1e5;
+  --active-bg: #cdcfd2;
+  --underline-bg: #aaafb5;
+  --translucent: rgba(249, 250, 251, 0.8);
+  --transparent: rgba(249, 250, 251, 0);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary-bg: #141516;
+    --primary-text: #ebebeb;
+    --secondary-bg: #30373a;
+    --secondary-text: #a4a7a9;
+    --hover-bg: #474c50;
+    --active-bg: #626569;
+    --underline-bg: #6d7176;
+    --translucent: rgba(47, 52, 55, 0.8);
+    --transparent: rgba(47, 52, 55, 0);
+  }
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
   font-size: 16px;
-
-  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", "Menlo", monospace;
-
-  --primary-bg: #191815;
-  --primary-text: #efefef;
-  --secondary-bg: #333;
-  --secondary-text: #9b9b9b;
-  --underline-bg: #aaafb5;
-  --translucent: rgba(249, 250, 251, 0.8);
-  --transparent: rgba(249, 250, 251, 0);
 }
 
 body {

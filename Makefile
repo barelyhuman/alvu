@@ -12,4 +12,4 @@ demo:
 	go run . --path lab
 
 docs: build 
-	./alvu --path="docs"
+	./alvu --path="docs" --baseurl="alvu/"

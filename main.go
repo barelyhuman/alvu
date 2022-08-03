@@ -29,15 +29,22 @@ import (
 )
 
 var mdProcessor goldmark.Markdown
+var baseurl string
+
+type SiteMeta struct {
+	BaseURL string
+}
 
 func main() {
 	basePathFlag := flag.String("path", ".", "`DIR` to search for the needed folders in")
 	outPathFlag := flag.String("out", "./dist", "`DIR` to output the compiled files to")
+	baseurlFlag := flag.String("baseurl", "/", "`URL` to be used as the root of the project")
 	hooksPathFlag := flag.String("hooks", "./hooks", "`DIR` that contains hooks for the content")
 
 	flag.Parse()
 
 	alvuFiles := []AlvuFile{}
+	baseurl = *baseurlFlag
 	basePath := path.Join(*basePathFlag)
 	pagesPath := path.Join(*basePathFlag, "pages")
 	publicPath := path.Join(*basePathFlag, "public")
@@ -309,9 +316,13 @@ func (a *AlvuFile) ProcessFile() error {
 	f.Write(a.headContent)
 
 	t.Execute(f, struct {
+		Meta   SiteMeta
 		Data   map[string]interface{}
 		Extras map[string]interface{}
 	}{
+		Meta: SiteMeta{
+			BaseURL: baseurl,
+		},
 		Data:   data,
 		Extras: extras,
 	})

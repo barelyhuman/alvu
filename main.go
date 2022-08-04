@@ -32,9 +32,7 @@ import (
 var mdProcessor goldmark.Markdown
 var baseurl string
 var basePath string
-var luaPool = &LPool{
-	states: make([]*lua.LState, 0, 4),
-}
+var hookCollection []*lua.LState
 
 type SiteMeta struct {
 	BaseURL string
@@ -50,19 +48,19 @@ func bail(err error) {
 
 func StartAlvuFileWorker(in <-chan *AlvuFile, out chan *AlvuFile, hookfiles []string) {
 	for file := range in {
+		err := file.ReadFile()
+		bail(err)
+		err = file.ParseMeta()
+		bail(err)
+
 		for _, hookpath := range hookfiles {
-			hook := luaPool.Get()
-			err := hook.DoFile(hookpath)
-			bail(err)
-			err = file.ReadFile()
-			bail(err)
-			err = file.ParseMeta()
+			hook := NewHook()
+			err = hook.DoFile(hookpath)
 			bail(err)
 			err = file.ProcessFile(hook)
 			bail(err)
-			luaPool.Put(hook)
-			out <- file
 		}
+		out <- file
 	}
 }
 
@@ -143,6 +141,7 @@ func main() {
 		destFilePath := strings.Replace(toProcessItem, pagesPath, outPath, 1)
 
 		alvuFile := &AlvuFile{
+			lock:        &sync.Mutex{},
 			sourcePath:  toProcessItem,
 			destPath:    destFilePath,
 			name:        fileName,
@@ -164,7 +163,11 @@ func main() {
 	senderGroup.Wait()
 	close(fileQIn)
 	close(fileQOut)
-	luaPool.Shutdown()
+
+	// cleanup hooks
+	for _, h := range hookCollection {
+		h.Close()
+	}
 }
 
 func CollectFilesToProcess(basepath string) []string {
@@ -223,6 +226,7 @@ func initMDProcessor() {
 }
 
 type AlvuFile struct {
+	lock             *sync.Mutex
 	name             string
 	sourcePath       string
 	destPath         string
@@ -274,6 +278,9 @@ func (a *AlvuFile) ParseMeta() error {
 
 func (a *AlvuFile) ProcessFile(hook *lua.LState) error {
 	// pre process hook => should return back json with `content` and `data`
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
 	a.targetName = regexp.MustCompile(`\.md$`).ReplaceAll([]byte(a.name), []byte(".html"))
 	buf := bytes.NewBuffer([]byte(""))
 	mdToHTML := ""
@@ -359,6 +366,7 @@ func (a *AlvuFile) FlushFile() {
 	defer f.Sync()
 
 	writeHeadTail := false
+
 	if filepath.Ext(a.sourcePath) == ".md" || filepath.Ext(a.sourcePath) == "html" {
 		writeHeadTail = true
 	}
@@ -393,24 +401,7 @@ func (a *AlvuFile) FlushFile() {
 	}
 }
 
-type LPool struct {
-	lock   sync.Mutex
-	states []*lua.LState
-}
-
-func (lp *LPool) Get() *lua.LState {
-	lp.lock.Lock()
-	defer lp.lock.Unlock()
-	n := len(lp.states)
-	if n == 0 {
-		return lp.New()
-	}
-	x := lp.states[n-1]
-	lp.states = lp.states[0 : n-1]
-	return x
-}
-
-func (lp *LPool) New() *lua.LState {
+func NewHook() *lua.LState {
 	lState := lua.NewState()
 	luajson.Preload(lState)
 	yamlLib.Preload(lState)
@@ -421,17 +412,6 @@ func (lp *LPool) New() *lua.LState {
 	} else {
 		lState.SetGlobal("workingdir", lua.LString(basePath))
 	}
+	hookCollection = append(hookCollection, lState)
 	return lState
-}
-
-func (lp *LPool) Put(L *lua.LState) {
-	lp.lock.Lock()
-	defer lp.lock.Unlock()
-	lp.states = append(lp.states, L)
-}
-
-func (lp *LPool) Shutdown() {
-	for _, lState := range lp.states {
-		lState.Close()
-	}
 }

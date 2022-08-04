@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"text/template"
 
 	ghttp "github.com/cjoudrey/gluahttp"
@@ -30,12 +31,47 @@ import (
 
 var mdProcessor goldmark.Markdown
 var baseurl string
+var basePath string
+var luaPool = &LPool{
+	states: make([]*lua.LState, 0, 4),
+}
 
 type SiteMeta struct {
 	BaseURL string
 }
 
+func bail(err error) {
+	if err == nil {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "[alvu]: "+err.Error())
+	panic("")
+}
+
+func StartAlvuFileWorker(in <-chan *AlvuFile, out chan *AlvuFile, hookfiles []string) {
+	for file := range in {
+		for _, hookpath := range hookfiles {
+			hook := luaPool.Get()
+			err := hook.DoFile(hookpath)
+			bail(err)
+			err = file.ReadFile()
+			bail(err)
+			err = file.ParseMeta()
+			bail(err)
+			err = file.ProcessFile(hook)
+			bail(err)
+			luaPool.Put(hook)
+			out <- file
+		}
+	}
+}
+
 func main() {
+	// wait group for the files being sent to process
+	senderGroup := &sync.WaitGroup{}
+
+	// FIXME: replace with a proper cli parser solution
+	// also add in config file parsing for this
 	basePathFlag := flag.String("path", ".", "`DIR` to search for the needed folders in")
 	outPathFlag := flag.String("out", "./dist", "`DIR` to output the compiled files to")
 	baseurlFlag := flag.String("baseurl", "/", "`URL` to be used as the root of the project")
@@ -43,9 +79,8 @@ func main() {
 
 	flag.Parse()
 
-	alvuFiles := []AlvuFile{}
 	baseurl = *baseurlFlag
-	basePath := path.Join(*basePathFlag)
+	basePath = path.Join(*basePathFlag)
 	pagesPath := path.Join(*basePathFlag, "pages")
 	publicPath := path.Join(*basePathFlag, "public")
 	headFilePath := path.Join(pagesPath, "_head.html")
@@ -53,6 +88,8 @@ func main() {
 	outPath := path.Join(*outPathFlag)
 	hooksPath := path.Join(*basePathFlag, *hooksPathFlag)
 
+	// read the head content into memory
+	// FIXME: change to a bufio instead
 	headContent, err := os.ReadFile(headFilePath)
 	if err != nil {
 		if err == fs.ErrNotExist {
@@ -60,6 +97,8 @@ func main() {
 		}
 	}
 
+	// read the tail content into memory
+	// FIXME: change to a bufio instead
 	tailContent, err := os.ReadFile(tailFilePath)
 	if err != nil {
 		if err == fs.ErrNotExist {
@@ -70,53 +109,62 @@ func main() {
 	// copy public to out
 	_, err = os.Stat(publicPath)
 	if err != nil && err != fs.ErrNotExist {
-		log.Println(err)
+		bail(fmt.Errorf("error reading `public` directory, ...skipping"))
 	}
 
 	err = cp.Copy(publicPath, outPath)
 	if err != nil {
-		log.Println(err)
+		bail(err)
 	}
 
-	// load all hooks
+	// collect the files paths needed to be processed
+	// also includes the hooks they are to be run against
 	hooksToUse := CollectHooks(basePath, hooksPath)
 	toProcess := CollectFilesToProcess(pagesPath)
+
+	// setup the initial markdown processor
+	// FIXME: if none of the files above have a `.md` file, ignore
+	// this step
 	initMDProcessor()
 
 	prefixSlashPath := regexp.MustCompile(`^\/`)
+
+	fileQIn := make(chan *AlvuFile, len(toProcess)*len(hooksToUse))
+	fileQOut := make(chan *AlvuFile, len(toProcess)*len(hooksToUse))
+
+	// start up 5 process threads
+	for i := 0; i < 5; i++ {
+		go StartAlvuFileWorker(fileQIn, fileQOut, hooksToUse)
+	}
 
 	for _, toProcessItem := range toProcess {
 		fileName := strings.Replace(toProcessItem, pagesPath, "", 1)
 		fileName = prefixSlashPath.ReplaceAllString(fileName, "")
 		destFilePath := strings.Replace(toProcessItem, pagesPath, outPath, 1)
 
-		alvuFiles = append(alvuFiles, AlvuFile{
+		alvuFile := &AlvuFile{
 			sourcePath:  toProcessItem,
 			destPath:    destFilePath,
 			name:        fileName,
 			headContent: headContent,
 			tailContent: tailContent,
-			hooks:       hooksToUse,
-		})
+			data:        map[string]interface{}{},
+			extras:      map[string]interface{}{},
+		}
+
+		senderGroup.Add(1)
+		go func() {
+			defer senderGroup.Done()
+			fileQIn <- alvuFile
+			outFile := <-fileQOut
+			outFile.FlushFile()
+		}()
 	}
 
-	// var wg sync.WaitGroup
-	for _, alvuFile := range alvuFiles {
-		// wg.Add(1)
-		// alvuFile := alvuFile
-		// go func() {
-		// defer wg.Done()
-		alvuFile.ReadFile()
-		alvuFile.ParseMeta()
-		alvuFile.ProcessFile()
-		// }()
-	}
-
-	// wg.Wait()
-
-	for _, hook := range hooksToUse {
-		hook.Close()
-	}
+	senderGroup.Wait()
+	close(fileQIn)
+	close(fileQOut)
+	luaPool.Shutdown()
 }
 
 func CollectFilesToProcess(basepath string) []string {
@@ -144,7 +192,7 @@ func CollectFilesToProcess(basepath string) []string {
 	return files
 }
 
-func CollectHooks(basePath, hooksBasePath string) (hooks []*lua.LState) {
+func CollectHooks(basePath, hooksBasePath string) (hooks []string) {
 	pathstoprocess, err := os.ReadDir(hooksBasePath)
 	if err != nil {
 		panic(err)
@@ -154,23 +202,8 @@ func CollectHooks(basePath, hooksBasePath string) (hooks []*lua.LState) {
 		if !strings.HasSuffix(pathInfo.Name(), ".lua") {
 			continue
 		}
-		lState := lua.NewState()
-		luajson.Preload(lState)
-		yamlLib.Preload(lState)
-		stringsLib.Preload(lState)
-		lState.PreloadModule("http", ghttp.NewHttpModule(&http.Client{}).Loader)
-		if basePath == "." {
-			lState.SetGlobal("workingdir", lua.LString(""))
-		} else {
-			lState.SetGlobal("workingdir", lua.LString(basePath))
-		}
-
 		hookPath := path.Join(hooksBasePath, pathInfo.Name())
-
-		if err := lState.DoFile(hookPath); err != nil {
-			panic(err)
-		}
-		hooks = append(hooks, lState)
+		hooks = append(hooks, hookPath)
 	}
 	return
 }
@@ -198,9 +231,14 @@ type AlvuFile struct {
 	writeableContent []byte
 	headContent      []byte
 	tailContent      []byte
-	hooks            []*lua.LState
+	targetName       []byte
+	data             map[string]interface{}
+	extras           map[string]interface{}
 }
 
+// ReadFile read the file data for the particualr alvu file
+// FIXME: add in a bufio reader and use that for the processing
+// later
 func (a *AlvuFile) ReadFile() error {
 	filecontent, err := os.ReadFile(a.sourcePath)
 	if err != nil {
@@ -210,6 +248,9 @@ func (a *AlvuFile) ReadFile() error {
 	return nil
 }
 
+// ReadFile read the file data for the particualr alvu file
+// FIXME: should use the bufio reader once `ReadFile` is able to
+// use it
 func (a *AlvuFile) ParseMeta() error {
 	sep := []byte("---")
 	if !bytes.HasPrefix(a.content, sep) {
@@ -231,11 +272,18 @@ func (a *AlvuFile) ParseMeta() error {
 	return nil
 }
 
-func (a *AlvuFile) ProcessFile() error {
+func (a *AlvuFile) ProcessFile(hook *lua.LState) error {
 	// pre process hook => should return back json with `content` and `data`
-	content := a.writeableContent
-	name := regexp.MustCompile(`\.md$`).ReplaceAll([]byte(a.name), []byte(".html"))
-	_ = a.destPath
+	a.targetName = regexp.MustCompile(`\.md$`).ReplaceAll([]byte(a.name), []byte(".html"))
+	buf := bytes.NewBuffer([]byte(""))
+	mdToHTML := ""
+
+	if filepath.Ext(a.name) == "md" {
+		newName := strings.Replace(a.name, filepath.Ext(a.name), ".html", 1)
+		a.targetName = []byte(newName)
+		mdProcessor.Convert(a.writeableContent, buf)
+		mdToHTML = buf.String()
+	}
 
 	hookInput := struct {
 		Name             string                 `json:"name"`
@@ -243,77 +291,90 @@ func (a *AlvuFile) ProcessFile() error {
 		DestPath         string                 `json:"dest_path"`
 		Meta             map[string]interface{} `json:"meta"`
 		WriteableContent string                 `json:"content"`
+		HTMLContent      string                 `json:"html"`
 	}{
-		Name:             string(name),
+		Name:             string(a.targetName),
 		SourcePath:       a.sourcePath,
 		DestPath:         a.destPath,
 		Meta:             a.meta,
 		WriteableContent: string(a.writeableContent),
+		HTMLContent:      mdToHTML,
 	}
 
-	hookJsonInput, _ := json.Marshal(hookInput)
+	hookJsonInput, err := json.Marshal(hookInput)
+	bail(err)
 
-	extras := map[string]interface{}{}
-	data := map[string]interface{}{}
-
-	for _, hook := range a.hooks {
-		if err := hook.CallByParam(lua.P{
-			Fn:      hook.GetGlobal("Writer"),
-			NRet:    1,
-			Protect: true,
-		}, lua.LString(hookJsonInput)); err != nil {
-			panic(err)
-		}
-
-		ret := hook.Get(-1)
-
-		var fromPlug map[string]interface{}
-
-		err := json.Unmarshal([]byte(ret.String()), &fromPlug)
-		if err != nil {
-			panic(err)
-		}
-
-		if fromPlug["content"] != nil {
-			stringVal := fmt.Sprintf("%s", fromPlug["content"])
-			content = []byte(stringVal)
-		}
-
-		if fromPlug["name"] != nil {
-			name = []byte(fmt.Sprintf("%v", fromPlug["name"]))
-		}
-
-		if fromPlug["data"] != nil {
-			// merge resulting map with overall for this file
-			pairs, _ := fromPlug["data"].(map[string]interface{})
-			for k, v := range pairs {
-				data[k] = v
-			}
-		}
-
-		if fromPlug["extras"] != nil {
-			pairs, _ := fromPlug["extras"].(map[string]interface{})
-			for k, v := range pairs {
-				extras[k] = v
-			}
-		}
-
-		hook.Pop(1)
+	if err := hook.CallByParam(lua.P{
+		Fn:      hook.GetGlobal("Writer"),
+		NRet:    1,
+		Protect: true,
+	}, lua.LString(hookJsonInput)); err != nil {
+		panic(err)
 	}
 
+	ret := hook.Get(-1)
+
+	var fromPlug map[string]interface{}
+
+	err = json.Unmarshal([]byte(ret.String()), &fromPlug)
+	bail(err)
+
+	if fromPlug["content"] != nil {
+		stringVal := fmt.Sprintf("%s", fromPlug["content"])
+		a.writeableContent = []byte(stringVal)
+	}
+
+	if fromPlug["name"] != nil {
+		a.targetName = []byte(fmt.Sprintf("%v", fromPlug["name"]))
+	}
+
+	if fromPlug["data"] != nil {
+		// merge resulting map with overall for this file
+		if pairs, ok := fromPlug["data"].(map[string]interface{}); ok {
+			for k, v := range pairs {
+				a.data[k] = v
+			}
+		}
+	}
+
+	if fromPlug["extras"] != nil {
+		if pairs, ok := fromPlug["extras"].(map[string]interface{}); ok {
+			for k, v := range pairs {
+				a.extras[k] = v
+			}
+		}
+	}
+
+	hook.Pop(1)
+	return nil
+}
+
+func (a *AlvuFile) FlushFile() {
 	destFolder := filepath.Dir(a.destPath)
 	os.MkdirAll(destFolder, os.ModePerm)
 
-	targetFile := strings.Replace(path.Join(a.destPath), a.name, string(name), 1)
-	f, _ := os.Create(targetFile)
+	targetFile := strings.Replace(path.Join(a.destPath), a.name, string(a.targetName), 1)
+	f, err := os.Create(targetFile)
+	bail(err)
 	defer f.Sync()
 
+	writeHeadTail := false
+	if filepath.Ext(a.sourcePath) == ".md" || filepath.Ext(a.sourcePath) == "html" {
+		writeHeadTail = true
+	}
+
 	var toHtml bytes.Buffer
-	mdProcessor.Convert(content, &toHtml)
+	if writeHeadTail {
+		mdProcessor.Convert(a.writeableContent, &toHtml)
+	} else {
+		toHtml.Write(a.writeableContent)
+	}
 
 	t := template.New(path.Join(a.sourcePath))
 	t.Parse(toHtml.String())
-	f.Write(a.headContent)
+	if writeHeadTail {
+		f.Write(a.headContent)
+	}
 
 	t.Execute(f, struct {
 		Meta   SiteMeta
@@ -323,11 +384,54 @@ func (a *AlvuFile) ProcessFile() error {
 		Meta: SiteMeta{
 			BaseURL: baseurl,
 		},
-		Data:   data,
-		Extras: extras,
+		Data:   a.data,
+		Extras: a.extras,
 	})
 
-	f.Write(a.tailContent)
+	if writeHeadTail {
+		f.Write(a.tailContent)
+	}
+}
 
-	return nil
+type LPool struct {
+	lock   sync.Mutex
+	states []*lua.LState
+}
+
+func (lp *LPool) Get() *lua.LState {
+	lp.lock.Lock()
+	defer lp.lock.Unlock()
+	n := len(lp.states)
+	if n == 0 {
+		return lp.New()
+	}
+	x := lp.states[n-1]
+	lp.states = lp.states[0 : n-1]
+	return x
+}
+
+func (lp *LPool) New() *lua.LState {
+	lState := lua.NewState()
+	luajson.Preload(lState)
+	yamlLib.Preload(lState)
+	stringsLib.Preload(lState)
+	lState.PreloadModule("http", ghttp.NewHttpModule(&http.Client{}).Loader)
+	if basePath == "." {
+		lState.SetGlobal("workingdir", lua.LString(""))
+	} else {
+		lState.SetGlobal("workingdir", lua.LString(basePath))
+	}
+	return lState
+}
+
+func (lp *LPool) Put(L *lua.LState) {
+	lp.lock.Lock()
+	defer lp.lock.Unlock()
+	lp.states = append(lp.states, L)
+}
+
+func (lp *LPool) Shutdown() {
+	for _, lState := range lp.states {
+		lState.Close()
+	}
 }

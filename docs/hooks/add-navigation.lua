@@ -1,12 +1,12 @@
 ---@diagnostic disable-next-line: undefined-global
-package.path = package.path .. ";" .. workingdir .. "/lib/?.lua"
-
+local wdir = workingdir
+package.path = package.path .. ";" .. wdir .. "/lib/?.lua"
 
 local json = require("json")
-local utils = require(workingdir .. ".lib.utils")
+local utils = require(wdir .. ".lib.utils")
 
 function Writer(filedata)
-    local pagesPath = workingdir .. "/pages"
+    local pagesPath = wdir .. "/pages"
     local files = utils.scandir(pagesPath)
     local index = {}
     for fileIndex = 3, #files do

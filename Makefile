@@ -1,6 +1,7 @@
 
-.PHONY.: clean build
+.PHONY.: all
 
+all: clean build
 
 clean:
 	rm -rf alvu 

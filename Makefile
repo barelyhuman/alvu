@@ -14,3 +14,6 @@ demo:
 
 docs: build 
 	./alvu --path="docs" --baseurl="/alvu/"
+
+docs_dev: build 
+	./alvu --path="docs"

@@ -33,7 +33,7 @@ go install
 ```
 
 ## Documentation 
-You can read the [docs](docs/pages/index) folder or visit the hosted version of it [here&rarr;](https://barelyhuman.github.io/alvu/)
+You can read the [docs](docs/pages/index) folder in the source code or visit the hosted version of it [here&rarr;](https://reaper.codeberg.page/alvu/)
 
 ## License 
 [MIT](license) 2022-Present [Reaper](https://github.com/barelyhuman)

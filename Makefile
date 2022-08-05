@@ -22,5 +22,5 @@ pages: docs
 	rm -rf alvu
 	git checkout pages 
 	mv dist/* . 
-	git add -A; git commit -m "update pages"; git push origin main;
+	git add -A; git commit -m "update pages"; git push origin pages;
 	git checkout main

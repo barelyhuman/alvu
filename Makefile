@@ -17,3 +17,10 @@ docs: build
 
 docs_dev: build 
 	./alvu --path="docs"
+
+pages: docs
+	rm -rf alvu
+	git checkout pages 
+	mv dist/* . 
+	git add -A; git commit -m "update pages"; git push origin main;
+	git checkout main

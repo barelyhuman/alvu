@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>alvu | documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+
+<header class="container">
+<nav>
+
+
+    <a href=/alvu/index>..</a>
+
+    <a href=/alvu/00-readme> Readme</a>
+
+    <a href=/alvu/01-the-basics> The Basics</a>
+
+    <a href=/alvu/02-scripting> Scripting</a>
+
+    <a href=/alvu/03-writers> Writers</a>
+
+    <a href=/alvu/04-lua-helpers> Lua Helpers</a>
+
+    <a href=/alvu/05-CLI> CLI</a>
+
+</nav>
+</header>
+<main class="container">
+<h1 id="alvu">alvu</h1>
+<blockquote>
+<p>another tiny static site generator</p>
+</blockquote>
+<h2 id="installation">Installation</h2>
+<h4 id="quick">Quick</h4>
+<ul>
+<li>You'll need <code>curl</code> installed on your system</li>
+</ul>
+<pre><code class="language-sh">curl -sf https://goblin.barelyhuman.xyz/github.com/barelyhuman/alvu | sh
+</code></pre>
+<h4 id="from-source--language-tools">From Source / Language tools</h4>
+<ul>
+<li>you'll need go lang installed and it's binary path added to your <code>PATH</code> env<br />
+variable</li>
+</ul>
+<pre><code class="language-sh"># if go &gt;= 1.8
+go install github.com/barelyhuman/alvu
+</code></pre>
+<p><strong>or</strong></p>
+<pre><code class="language-sh">git clone https://github.com/barelyhuman/alvu
+cd alvu 
+go mod tidy 
+go build 
+go install
+</code></pre>
+<h2 id="documentation">Documentation</h2>
+<p>You can read the <a href="docs/pages/index">docs</a> folder or visit the hosted version of it <a href="https://barelyhuman.github.io/alvu/">here→</a></p>
+<h2 id="license">License</h2>
+<p><a href="license">MIT</a> 2022-Present <a href="https://github.com/barelyhuman">Reaper</a></main></p>
+<footer class="container">
+    Built with <a href="http://github.com/barelyhuman/alvu">alvu</a>
+</footer>
+</body>
+</html>

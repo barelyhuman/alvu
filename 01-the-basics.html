@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>alvu | documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+
+<header class="container">
+<nav>
+
+
+    <a href=/alvu/index>..</a>
+
+    <a href=/alvu/00-readme> Readme</a>
+
+    <a href=/alvu/01-the-basics> The Basics</a>
+
+    <a href=/alvu/02-scripting> Scripting</a>
+
+    <a href=/alvu/03-writers> Writers</a>
+
+    <a href=/alvu/04-lua-helpers> Lua Helpers</a>
+
+    <a href=/alvu/05-CLI> CLI</a>
+
+</nav>
+</header>
+<main class="container">
+<h1 id="basics">Basics</h1>
+<p>Yeah, so to use <code>alvu</code>, you just run it.</p>
+<pre><code class="language-sh">$ alvu
+</code></pre>
+<p>Yep, that's it, that's all you do.</p>
+<p>Mainly because the tool comes with it's preferred defaults and they are as<br />
+follows.</p>
+<ul>
+<li>a directory named <code>pages</code></li>
+<li>a directory named <code>hooks</code></li>
+<li>a directory named <code>public</code></li>
+</ul>
+<p>and each one of them represent exactly what they are called.</p>
+<h2 id="pages">Pages</h2>
+<p>This is simply a collection of files that you're website would be made up of,<br />
+these can be of the following formats.</p>
+<ul>
+<li><code>.md</code> - Markdown - Will be converted to HTML</li>
+<li><code>.html</code> - HTML - Will be converted to nothing.</li>
+<li><code>.xml</code> - XML - Will be converted to nothing.</li>
+</ul>
+<p><strong>So, just a markdown processor huh?</strong></p>
+<p>Yeah... and no.</p>
+<h3 id="special-files">Special Files</h3>
+<ul>
+<li><code>_head.html</code> - will add the header section to the final HTML</li>
+<li><code>_tail.html</code> - will add the footer section to the final HTML</li>
+</ul>
+<p>These files basically execute right before the conversion (if necessary) takes<br />
+place, and is where you'd put your <code>&lt;head&gt;&lt;/head&gt;</code> related stuff.</p>
+<p>Both markdown and html files are template friendly and you can use variables and<br />
+any other Go Template functionality in them.</p>
+<h2 id="hooks">Hooks</h2>
+<p>The other side of the CLI was to be able to extend simple functionalities when<br />
+needed, and this is where the <code>hooks</code> folder comes.</p>
+<p>This is going to be a collection of <code>.lua</code> files that can each have a <code>Writer</code><br />
+function which is given data of the file that's being processed.</p>
+<p>So, if I'm processing <code>index.md</code> then you'd get the name, path, current content<br />
+of the file, which you can return as is or change it and that'll over-ride the<br />
+original content in the compiled files.</p>
+<p>For an example, you can check this very documentation site's source code</p>
+<h2 id="public">Public</h2>
+<p>Pretty self explanatory but the <code>public</code> folder will basically copy everything<br />
+put into it to the <code>dist</code> folder.</p>
+<p>Let's move forward to <a href="02-scripting">scripting →</a></p>
+</main><footer class="container">
+    Built with <a href="http://github.com/barelyhuman/alvu">alvu</a>
+</footer>
+</body>
+</html>

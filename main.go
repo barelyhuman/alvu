@@ -53,11 +53,16 @@ func StartAlvuFileWorker(in <-chan *AlvuFile, out chan *AlvuFile, hookfiles []st
 		err = file.ParseMeta()
 		bail(err)
 
-		for _, hookpath := range hookfiles {
-			hook := NewHook()
-			err = hook.DoFile(hookpath)
-			bail(err)
-			err = file.ProcessFile(hook)
+		if len(hookfiles) > 0 {
+			for _, hookpath := range hookfiles {
+				hook := NewHook()
+				err = hook.DoFile(hookpath)
+				bail(err)
+				err = file.ProcessFile(hook)
+				bail(err)
+			}
+		} else {
+			err = file.ProcessFile(nil)
 			bail(err)
 		}
 		out <- file
@@ -106,13 +111,11 @@ func main() {
 
 	// copy public to out
 	_, err = os.Stat(publicPath)
-	if err != nil && err != fs.ErrNotExist {
-		bail(fmt.Errorf("error reading `public` directory, ...skipping"))
-	}
-
-	err = cp.Copy(publicPath, outPath)
-	if err != nil {
-		bail(err)
+	if err == nil {
+		err = cp.Copy(publicPath, outPath)
+		if err != nil {
+			bail(err)
+		}
 	}
 
 	// collect the files paths needed to be processed
@@ -196,6 +199,9 @@ func CollectFilesToProcess(basepath string) []string {
 }
 
 func CollectHooks(basePath, hooksBasePath string) (hooks []string) {
+	if _, err := os.Stat(hooksBasePath); err != nil {
+		return
+	}
 	pathstoprocess, err := os.ReadDir(hooksBasePath)
 	if err != nil {
 		panic(err)
@@ -290,6 +296,10 @@ func (a *AlvuFile) ProcessFile(hook *lua.LState) error {
 		a.targetName = []byte(newName)
 		mdProcessor.Convert(a.writeableContent, buf)
 		mdToHTML = buf.String()
+	}
+
+	if hook == nil {
+		return nil
 	}
 
 	hookInput := struct {

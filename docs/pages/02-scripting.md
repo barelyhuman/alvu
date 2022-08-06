@@ -93,3 +93,4 @@ manipulation cascades on the other so if you are running a lot of hooks, name
 them with numbers (eg: `01-add-navigation.lua`) if you wish for them to follow a
 certain sequence
 
+[More about Writers &rarr;](03-writers)

@@ -230,3 +230,9 @@ blockquote em,
 blockquote pre {
   font-style: normal;
 }
+
+pre,
+code {
+  font-size: 1.25em;
+  line-height: 2em;
+}

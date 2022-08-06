@@ -133,6 +133,9 @@ func main() {
 	fileQIn := make(chan *AlvuFile, len(toProcess)*len(hooksToUse))
 	fileQOut := make(chan *AlvuFile, len(toProcess)*len(hooksToUse))
 
+	// right before completion run all hooks again but for the onFinish
+	RunAllHooks(hooksToUse, "OnStart")
+
 	// start up 5 process threads
 	for i := 0; i < 5; i++ {
 		go StartAlvuFileWorker(fileQIn, fileQOut, hooksToUse)
@@ -168,24 +171,7 @@ func main() {
 	close(fileQOut)
 
 	// right before completion run all hooks again but for the onFinish
-	for _, hookPath := range hooksToUse {
-		hook := NewHook()
-		if err = hook.DoFile(hookPath); err != nil {
-			panic(err)
-		}
-
-		hookFunc := hook.GetGlobal("OnFinish")
-
-		if hookFunc != lua.LNil {
-			if err := hook.CallByParam(lua.P{
-				Fn:      hook.GetGlobal("OnFinish"),
-				NRet:    0,
-				Protect: true,
-			}); err != nil {
-				panic(err)
-			}
-		}
-	}
+	RunAllHooks(hooksToUse, "OnFinish")
 
 	// cleanup hooks
 	for _, h := range hookCollection {
@@ -444,4 +430,25 @@ func NewHook() *lua.LState {
 	}
 	hookCollection = append(hookCollection, lState)
 	return lState
+}
+
+func RunAllHooks(hooksToUse []string, funcToCall string) {
+	for _, hookPath := range hooksToUse {
+		hook := NewHook()
+		if err := hook.DoFile(hookPath); err != nil {
+			panic(err)
+		}
+
+		hookFunc := hook.GetGlobal(funcToCall)
+
+		if hookFunc != lua.LNil {
+			if err := hook.CallByParam(lua.P{
+				Fn:      hook.GetGlobal(funcToCall),
+				NRet:    0,
+				Protect: true,
+			}); err != nil {
+				panic(err)
+			}
+		}
+	}
 }

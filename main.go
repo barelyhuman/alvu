@@ -167,6 +167,26 @@ func main() {
 	close(fileQIn)
 	close(fileQOut)
 
+	// right before completion run all hooks again but for the onFinish
+	for _, hookPath := range hooksToUse {
+		hook := NewHook()
+		if err = hook.DoFile(hookPath); err != nil {
+			panic(err)
+		}
+
+		hookFunc := hook.GetGlobal("OnFinish")
+
+		if hookFunc != lua.LNil {
+			if err := hook.CallByParam(lua.P{
+				Fn:      hook.GetGlobal("OnFinish"),
+				NRet:    0,
+				Protect: true,
+			}); err != nil {
+				panic(err)
+			}
+		}
+	}
+
 	// cleanup hooks
 	for _, h := range hookCollection {
 		h.Close()
@@ -291,7 +311,7 @@ func (a *AlvuFile) ProcessFile(hook *lua.LState) error {
 	buf := bytes.NewBuffer([]byte(""))
 	mdToHTML := ""
 
-	if filepath.Ext(a.name) == "md" {
+	if filepath.Ext(a.name) == ".md" {
 		newName := strings.Replace(a.name, filepath.Ext(a.name), ".html", 1)
 		a.targetName = []byte(newName)
 		mdProcessor.Convert(a.writeableContent, buf)

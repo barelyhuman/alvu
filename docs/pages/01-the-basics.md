@@ -60,8 +60,4 @@ For an example, you can check this very documentation site's source code
 Pretty self explanatory but the `public` folder will basically copy everything
 put into it to the `dist` folder.
 
-
 Let's move forward to [scripting &rarr;](02-scripting)
-
-
-

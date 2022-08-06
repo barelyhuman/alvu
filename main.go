@@ -204,7 +204,7 @@ func CollectFilesToProcess(basepath string) []string {
 	for _, pathInfo := range pathstoprocess {
 		_path := path.Join(basepath, pathInfo.Name())
 
-		if pathInfo.Name() == "_head.html" {
+		if pathInfo.Name() == "_head.html" || pathInfo.Name() == "_tail.html" {
 			continue
 		}
 

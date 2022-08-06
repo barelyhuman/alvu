@@ -4,6 +4,16 @@
 
 Methods and ways to be able to do basic tasks while working with alvu
 
+## Watching for changes
+
+I use [entr](https://github.com/eradman/entr) as a file notifier which can run arbitrary commands on file changes, which can be done like so to have alvu monitor for files
+
+```sh
+ls docs/**/* | entr -cr alvu --path='./docs'
+```
+
+This will list all files in the `docs` folder (root of an alvu project) and then run the alvu command while specifying the base path to be `./docs`
+
 ## Importing other lua files
 
 You'll need to work with lua files that are in a sibling directory

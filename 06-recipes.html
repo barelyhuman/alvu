@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>alvu | documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+
+<header class="container">
+<nav>
+
+
+    <a href=/alvu/index>..</a>
+
+    <a href=/alvu/00-readme> Readme</a>
+
+    <a href=/alvu/01-basics> Basics</a>
+
+    <a href=/alvu/02-scripting> Scripting</a>
+
+    <a href=/alvu/03-writers> Writers</a>
+
+    <a href=/alvu/05-CLI> CLI</a>
+
+    <a href=/alvu/06-recipes> Recipes</a>
+
+</nav>
+</header>
+<main class="container">
+<h1 id="recipes">Recipes</h1>
+<p><a href="#templates">Jump to Templates</a></p>
+<p>Methods and ways to be able to do basic tasks while working with alvu</p>
+<h2 id="importing-other-lua-files">Importing other lua files</h2>
+<p>You'll need to work with lua files that are in a sibling directory<br />
+in the project and you can do so by adding them to the scripts<br />
+<code>package.path</code> like so</p>
+<pre><code class="language-lua">-- specify that you wish to taken in any `.lua` file in the `lib` folder
+package.path = package.path .. &quot;;../lib/?.lua&quot;
+
+-- require lib/utils.lua to use utilities from it
+local lib = require(&quot;lib.utils&quot;)
+</code></pre>
+<h2 id="string-interpolation">String Interpolation</h2>
+<p>There's no way to directly do string interpolation in lua but is almost always needed so here's how you can implement a small helper for it</p>
+<pre><code class="language-lua">local function interpolate(s, tab)
+    return (s:gsub('($%b{})', function(w) return tab[w:sub(3, -2)] or w end))
+end
+
+-- usage
+interpolate(&quot;this is a ${message} string&quot;, { message = &quot;interpolated&quot; })
+</code></pre>
+<h2 id="string-functions">String Functions</h2>
+<p>A helper library is injected into all alvu hook files which can be required into the script to help with basic string manipulation and querying</p>
+<pre><code class="language-lua">local strings = require(&quot;strings&quot;)
+if strings.contains(&quot;hello world&quot;, &quot;hello&quot;)
+then
+	print(&quot;found hello&quot;)
+end
+</code></pre>
+<p>You can read more about these from the <a href="https://github.com/vadv/gopher-lua-libs/tree/master/strings">gopher-lua-libs</a> repo.</p>
+<h2 id="get-files-from-a-directory">Get files from a directory</h2>
+<p>If working with blogs and nested data you might wanna get files in a directory and you can use the following function</p>
+<pre><code class="language-lua">function scandir(directory)
+    local i, t, popen = 0, {}, io.popen
+
+    local pfile = popen('ls -a &quot;' .. directory .. '&quot;')
+    if pfile then
+        for filename in pfile:lines() do
+            i = i + 1
+            t[i] = filename
+        end
+        pfile:close()
+    end
+    return t
+end
+</code></pre>
+<h2 id="reading--writing-files">Reading / Writing files</h2>
+<p>This can be done with native lua functions but here's a snippet of<br />
+the <code>onFinish</code> hook from <a href="https://github.com/barelyhuman/reaper.is">reaper.is</a>' RSS Feed hook</p>
+<pre><code class="language-lua">function OnFinish()
+    -- attempt to open the template file in read mode
+	local rss_temp_fd = io.open(&quot;dist/rss_tmpl.xml&quot;, &quot;r&quot;)
+	-- attempt to open the final file in write mode
+    local rss_fd = io.open(&quot;dist/rss.xml&quot;, &quot;w&quot;)
+
+	-- check if the file descriptors are available and usable
+    if rss_temp_fd and rss_fd
+    then
+		-- read the entire template file's body
+		-- which contains the rss &lt;item&gt;&lt;/item&gt; tags
+        local body = &quot;&quot;
+        for c in rss_temp_fd:lines() do
+            body = body .. &quot;\n&quot; .. c
+        end
+
+		-- generate a rss file template for the following
+		-- site data
+        local rss_data = rss_template({
+            site_name = &quot;reaper&quot;,
+            site_link = &quot;https://reaper.is&quot;,
+            site_description = &quot;reaper's rants,notes and stuff&quot;,
+            itembody = body
+        })
+
+		-- write the whole thing to the final rss.xml file
+        rss_fd:write(rss_data)
+    end
+end
+</code></pre>
+<h2 id="templates">Templates</h2>
+<p>The most preferred way of using alvu is to avoid having to construct<br />
+hooks and use existing example repositories as the source, this gives us the advantage of not having to spend time writing similar static site generation logic while keeping it easy to extend.</p>
+<h3 id="official-templates">Official Templates</h3>
+<p>TBD</p>
+<h3 id="community-templates">Community Templates</h3>
+<p>Feel free to add in your templates here via PR's on the <a href="http://codeberg.org/reaper/alvu">source repo</a> or<br />
+mailing <a href="mailto:ahoy@barelyhuman.dev">me</a> if you wish to avoid creating a <a href="https://codeberg.org">codeberg.org</a> account</p>
+</main><footer class="container">
+    Built with <a href="http://github.com/barelyhuman/alvu">alvu</a>
+</footer>
+</body>
+</html>

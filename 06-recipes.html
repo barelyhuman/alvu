@@ -40,6 +40,11 @@
 <h1 id="recipes">Recipes</h1>
 <p><a href="#templates">Jump to Templates</a></p>
 <p>Methods and ways to be able to do basic tasks while working with alvu</p>
+<h2 id="watching-for-changes">Watching for changes</h2>
+<p>I use <a href="https://github.com/eradman/entr">entr</a> as a file notifier which can run arbitrary commands on file changes, which can be done like so to have alvu monitor for files</p>
+<pre><code class="language-sh">ls docs/**/* | entr -cr alvu --path='./docs'
+</code></pre>
+<p>This will list all files in the <code>docs</code> folder (root of an alvu project) and then run the alvu command while specifying the base path to be <code>./docs</code></p>
 <h2 id="importing-other-lua-files">Importing other lua files</h2>
 <p>You'll need to work with lua files that are in a sibling directory<br />
 in the project and you can do so by adding them to the scripts<br />

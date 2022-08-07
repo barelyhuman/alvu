@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -12,10 +13,12 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"text/template"
 
+	"github.com/barelyhuman/go/env"
 	ghttp "github.com/cjoudrey/gluahttp"
 
 	cp "github.com/otiai10/copy"
@@ -39,19 +42,18 @@ var mdProcessor goldmark.Markdown
 var baseurl string
 var basePath string
 var hookCollection HookCollection
+var wg = &sync.WaitGroup{}
 
 type SiteMeta struct {
 	BaseURL string
 }
 
-func bail(err error) {
-	if err == nil {
-		return
-	}
-	fmt.Fprintf(os.Stderr, "[alvu]: "+err.Error())
-	panic("")
-}
 func main() {
+	onDebug(func() {
+		debugInfo("Before Exec")
+		memuse()
+	})
+
 	basePathFlag := flag.String("path", ".", "`DIR` to search for the needed folders in")
 	outPathFlag := flag.String("out", "./dist", "`DIR` to output the compiled files to")
 	baseurlFlag := flag.String("baseurl", "/", "`URL` to be used as the root of the project")
@@ -68,20 +70,32 @@ func main() {
 	outPath := path.Join(*outPathFlag)
 	hooksPath := path.Join(*basePathFlag, *hooksPathFlag)
 
-	headContent, err := os.ReadFile(headFilePath)
+	onDebug(func() {
+		debugInfo("Opening _head")
+		memuse()
+	})
+	headFileFd, err := os.Open(headFilePath)
 	if err != nil {
 		if err == fs.ErrNotExist {
 			log.Println("no _head.html found,skipping")
 		}
 	}
 
-	tailContent, err := os.ReadFile(tailFilePath)
+	onDebug(func() {
+		debugInfo("Opening _tail")
+		memuse()
+	})
+	tailFileFd, err := os.Open(tailFilePath)
 	if err != nil {
 		if err == fs.ErrNotExist {
 			log.Println("no _tail.html found, skipping")
 		}
 	}
 
+	onDebug(func() {
+		debugInfo("Before copying files")
+		memuse()
+	})
 	// copy public to out
 	_, err = os.Stat(publicPath)
 	if err == nil {
@@ -90,42 +104,53 @@ func main() {
 			bail(err)
 		}
 	}
+	onDebug(func() {
+		debugInfo("After copying files")
+		memuse()
+	})
 
+	onDebug(func() {
+		debugInfo("Reading hook and to process files")
+		memuse()
+	})
 	CollectHooks(basePath, hooksPath)
 	toProcess := CollectFilesToProcess(pagesPath)
 
 	initMDProcessor()
 
+	onDebug(func() {
+		debugInfo("Running all OnStart hooks")
+		memuse()
+	})
 	hookCollection.RunAll("OnStart")
 
 	prefixSlashPath := regexp.MustCompile(`^\/`)
 
-	alvuFiles := []*AlvuFile{}
-
+	onDebug(func() {
+		debugInfo("Processing Files")
+		memuse()
+	})
 	for _, toProcessItem := range toProcess {
 		fileName := strings.Replace(toProcessItem, pagesPath, "", 1)
 		fileName = prefixSlashPath.ReplaceAllString(fileName, "")
 		destFilePath := strings.Replace(toProcessItem, pagesPath, outPath, 1)
 
 		alvuFile := &AlvuFile{
-			lock:        &sync.Mutex{},
-			sourcePath:  toProcessItem,
-			destPath:    destFilePath,
-			name:        fileName,
-			headContent: headContent,
-			tailContent: tailContent,
-			data:        map[string]interface{}{},
-			extras:      map[string]interface{}{},
+			lock:       &sync.Mutex{},
+			sourcePath: toProcessItem,
+			destPath:   destFilePath,
+			name:       fileName,
+			headFile:   headFileFd,
+			tailFile:   tailFileFd,
+			data:       map[string]interface{}{},
+			extras:     map[string]interface{}{},
 		}
 
 		bail(alvuFile.ReadFile())
 		bail(alvuFile.ParseMeta())
 
-		alvuFiles = append(alvuFiles, alvuFile)
-	}
+		for _, hook := range hookCollection {
 
-	for _, hook := range hookCollection {
-		for _, alvuFile := range alvuFiles {
 			isForSpecificFile := hook.state.GetGlobal("ForFile")
 
 			if isForSpecificFile != lua.LNil && alvuFile.name != isForSpecificFile.String() {
@@ -133,13 +158,22 @@ func main() {
 			}
 
 			bail(alvuFile.ProcessFile(hook.state))
-			alvuFile.FlushFile()
 		}
+		alvuFile.FlushFile()
 	}
-
+	onDebug(func() {
+		debugInfo("Run all OnFinish Hooks")
+		memuse()
+	})
 	// right before completion run all hooks again but for the onFinish
 	hookCollection.RunAll("OnFinish")
 	hookCollection.Shutdown()
+
+	onDebug(func() {
+		runtime.GC()
+		debugInfo("On Completions")
+		memuse()
+	})
 }
 
 func CollectFilesToProcess(basepath string) []string {
@@ -246,8 +280,8 @@ type AlvuFile struct {
 	meta             map[string]interface{}
 	content          []byte
 	writeableContent []byte
-	headContent      []byte
-	tailContent      []byte
+	headFile         *os.File
+	tailFile         *os.File
 	targetName       []byte
 	data             map[string]interface{}
 	extras           map[string]interface{}
@@ -347,20 +381,11 @@ func (a *AlvuFile) ProcessFile(hook *lua.LState) error {
 	}
 
 	if fromPlug["data"] != nil {
-		// merge resulting map with overall for this file
-		if pairs, ok := fromPlug["data"].(map[string]interface{}); ok {
-			for k, v := range pairs {
-				a.data[k] = v
-			}
-		}
+		a.data = mergeMapWithCheck(a.data, fromPlug["data"])
 	}
 
 	if fromPlug["extras"] != nil {
-		if pairs, ok := fromPlug["extras"].(map[string]interface{}); ok {
-			for k, v := range pairs {
-				a.extras[k] = v
-			}
-		}
+		a.extras = mergeMapWithCheck(a.extras, fromPlug["extras"])
 	}
 
 	hook.Pop(1)
@@ -391,11 +416,14 @@ func (a *AlvuFile) FlushFile() {
 
 	t := template.New(path.Join(a.sourcePath))
 	t.Parse(toHtml.String())
+
 	if writeHeadTail {
-		f.Write(a.headContent)
+		a.headFile.Seek(0, 0)
+		_, err = io.Copy(f, a.headFile)
+		bail(err)
 	}
 
-	t.Execute(f, struct {
+	err = t.Execute(f, struct {
 		Meta   SiteMeta
 		Data   map[string]interface{}
 		Extras map[string]interface{}
@@ -407,8 +435,12 @@ func (a *AlvuFile) FlushFile() {
 		Extras: a.extras,
 	})
 
+	bail(err)
+
 	if writeHeadTail {
-		f.Write(a.tailContent)
+		a.tailFile.Seek(0, 0)
+		_, err = io.Copy(f, a.tailFile)
+		bail(err)
 	}
 }
 
@@ -425,4 +457,60 @@ func NewHook() *lua.LState {
 		lState.SetGlobal("workingdir", lua.LString(basePath))
 	}
 	return lState
+}
+
+// UTILS
+
+func memuse() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	fmt.Printf("heap: %v MiB\n", bytesToMB(m.HeapAlloc))
+}
+
+func bytesToMB(inBytes uint64) uint64 {
+	return inBytes / 1024 / 1024
+}
+
+func bail(err error) {
+	if err == nil {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "[alvu]: "+err.Error())
+	panic("")
+}
+
+func debugInfo(msg string, a ...any) {
+	Color := "\u001b[1m\033[36m"
+	Reset := "\033[0m"
+
+	prefix := "[alvu]"
+	prefix = Color + prefix
+	prefix += Reset + " "
+
+	fmt.Fprintf(os.Stdout, prefix+msg+" \n", a...)
+}
+
+func showDebug() bool {
+	showInfo := env.Get("DEBUG_ALVU", "")
+	return len(showInfo) != 0
+}
+
+func onDebug(fn func()) {
+	if !showDebug() {
+		return
+	}
+
+	fn()
+}
+
+func mergeMapWithCheck(maps ...any) (source map[string]interface{}) {
+	source = map[string]interface{}{}
+	for _, toCheck := range maps {
+		if pairs, ok := toCheck.(map[string]interface{}); ok {
+			for k, v := range pairs {
+				source[k] = v
+			}
+		}
+	}
+	return source
 }

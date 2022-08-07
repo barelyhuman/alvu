@@ -3,13 +3,15 @@ local wdir = workingdir
 package.path = package.path .. ";" .. wdir .. "/lib/?.lua"
 
 local json = require("json")
+local alvu = require("alvu")
 local utils = require(wdir .. ".lib.utils")
 
 function Writer(filedata)
     local pagesPath = wdir .. "/pages"
-    local files = utils.scandir(pagesPath)
     local index = {}
-    for fileIndex = 3, #files do
+    local files = alvu.files(pagesPath)
+
+    for fileIndex = 1, #files do
         if not (files[fileIndex] == "_head.html" or files[fileIndex] == "index.md" or files[fileIndex] == "_tail.html")
         then
             local name = string.gsub(files[fileIndex], ".md", "")

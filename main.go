@@ -126,13 +126,13 @@ func main() {
 
 	for _, hook := range hookCollection {
 		for _, alvuFile := range alvuFiles {
-			isForSpecificFile := hook.GetGlobal("ForFile")
+			isForSpecificFile := hook.state.GetGlobal("ForFile")
 
 			if isForSpecificFile != lua.LNil && alvuFile.name != isForSpecificFile.String() {
 				continue
 			}
 
-			bail(alvuFile.ProcessFile(hook))
+			bail(alvuFile.ProcessFile(hook.state))
 			alvuFile.FlushFile()
 		}
 	}
@@ -185,7 +185,10 @@ func CollectHooks(basePath, hooksBasePath string) {
 		if err := hook.DoFile(hookPath); err != nil {
 			panic(err)
 		}
-		hookCollection = append(hookCollection, hook)
+		hookCollection = append(hookCollection, &Hook{
+			path:  hookPath,
+			state: hook,
+		})
 	}
 
 }
@@ -204,28 +207,35 @@ func initMDProcessor() {
 	)
 }
 
-type HookCollection []*lua.LState
+type Hook struct {
+	path  string
+	state *lua.LState
+}
+
+type HookCollection []*Hook
 
 func (hc HookCollection) Shutdown() {
 	for _, hook := range hc {
-		hook.Close()
+		hook.state.Close()
 	}
 }
 
 func (hc HookCollection) RunAll(funcName string) {
-	for _, hook := range hc {
-		hookFunc := hook.GetGlobal(funcName)
+	log.Println(len(hc))
+	for i, hook := range hc {
+		print("executing", i)
+		hookFunc := hook.state.GetGlobal(funcName)
 
 		if hookFunc == lua.LNil {
-			return
+			continue
 		}
 
-		if err := hook.CallByParam(lua.P{
-			Fn:      hook.GetGlobal(funcName),
+		if err := hook.state.CallByParam(lua.P{
+			Fn:      hookFunc,
 			NRet:    0,
 			Protect: true,
 		}); err != nil {
-			panic(err)
+			bail(err)
 		}
 	}
 }

@@ -221,9 +221,7 @@ func (hc HookCollection) Shutdown() {
 }
 
 func (hc HookCollection) RunAll(funcName string) {
-	log.Println(len(hc))
-	for i, hook := range hc {
-		print("executing", i)
+	for _, hook := range hc {
 		hookFunc := hook.state.GetGlobal(funcName)
 
 		if hookFunc == lua.LNil {

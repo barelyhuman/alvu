@@ -16,7 +16,7 @@ function Writer(filedata)
         then
             local name = string.gsub(files[fileIndex], ".md", "")
             name = string.gsub(name, ".html", "")
-            local title, _ = utils.totitlecase(name)
+            local title, _ = utils.normalize(name):lower()
 
             table.insert(index, {
                 name = title,

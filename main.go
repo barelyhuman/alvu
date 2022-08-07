@@ -31,13 +31,14 @@ import (
 	lua "github.com/yuin/gopher-lua"
 	"gopkg.in/yaml.v3"
 
+	luaAlvu "codeberg.org/reaper/alvu/lua/alvu"
 	luajson "layeh.com/gopher-json"
 )
 
 var mdProcessor goldmark.Markdown
 var baseurl string
 var basePath string
-var hookCollection []*lua.LState
+var hookCollection HookCollection
 
 type SiteMeta struct {
 	BaseURL string
@@ -50,36 +51,7 @@ func bail(err error) {
 	fmt.Fprintf(os.Stderr, "[alvu]: "+err.Error())
 	panic("")
 }
-
-func StartAlvuFileWorker(in <-chan *AlvuFile, out chan *AlvuFile, hookfiles []string) {
-	for file := range in {
-		err := file.ReadFile()
-		bail(err)
-		err = file.ParseMeta()
-		bail(err)
-
-		if len(hookfiles) > 0 {
-			for _, hookpath := range hookfiles {
-				hook := NewHook()
-				err = hook.DoFile(hookpath)
-				bail(err)
-				err = file.ProcessFile(hook)
-				bail(err)
-			}
-		} else {
-			err = file.ProcessFile(nil)
-			bail(err)
-		}
-		out <- file
-	}
-}
-
 func main() {
-	// wait group for the files being sent to process
-	senderGroup := &sync.WaitGroup{}
-
-	// FIXME: replace with a proper cli parser solution
-	// also add in config file parsing for this
 	basePathFlag := flag.String("path", ".", "`DIR` to search for the needed folders in")
 	outPathFlag := flag.String("out", "./dist", "`DIR` to output the compiled files to")
 	baseurlFlag := flag.String("baseurl", "/", "`URL` to be used as the root of the project")
@@ -96,8 +68,6 @@ func main() {
 	outPath := path.Join(*outPathFlag)
 	hooksPath := path.Join(*basePathFlag, *hooksPathFlag)
 
-	// read the head content into memory
-	// FIXME: change to a bufio instead
 	headContent, err := os.ReadFile(headFilePath)
 	if err != nil {
 		if err == fs.ErrNotExist {
@@ -105,8 +75,6 @@ func main() {
 		}
 	}
 
-	// read the tail content into memory
-	// FIXME: change to a bufio instead
 	tailContent, err := os.ReadFile(tailFilePath)
 	if err != nil {
 		if err == fs.ErrNotExist {
@@ -123,28 +91,16 @@ func main() {
 		}
 	}
 
-	// collect the files paths needed to be processed
-	// also includes the hooks they are to be run against
-	hooksToUse := CollectHooks(basePath, hooksPath)
+	CollectHooks(basePath, hooksPath)
 	toProcess := CollectFilesToProcess(pagesPath)
 
-	// setup the initial markdown processor
-	// FIXME: if none of the files above have a `.md` file, ignore
-	// this step
 	initMDProcessor()
+
+	hookCollection.RunAll("OnStart")
 
 	prefixSlashPath := regexp.MustCompile(`^\/`)
 
-	fileQIn := make(chan *AlvuFile, len(toProcess)*len(hooksToUse))
-	fileQOut := make(chan *AlvuFile, len(toProcess)*len(hooksToUse))
-
-	// right before completion run all hooks again but for the onFinish
-	RunAllHooks(hooksToUse, "OnStart")
-
-	// start up 5 process threads
-	for i := 0; i < 5; i++ {
-		go StartAlvuFileWorker(fileQIn, fileQOut, hooksToUse)
-	}
+	alvuFiles := []*AlvuFile{}
 
 	for _, toProcessItem := range toProcess {
 		fileName := strings.Replace(toProcessItem, pagesPath, "", 1)
@@ -162,26 +118,28 @@ func main() {
 			extras:      map[string]interface{}{},
 		}
 
-		senderGroup.Add(1)
-		go func() {
-			defer senderGroup.Done()
-			fileQIn <- alvuFile
-			outFile := <-fileQOut
-			outFile.FlushFile()
-		}()
+		bail(alvuFile.ReadFile())
+		bail(alvuFile.ParseMeta())
+
+		alvuFiles = append(alvuFiles, alvuFile)
 	}
 
-	senderGroup.Wait()
-	close(fileQIn)
-	close(fileQOut)
+	for _, hook := range hookCollection {
+		for _, alvuFile := range alvuFiles {
+			isForSpecificFile := hook.GetGlobal("ForFile")
+
+			if isForSpecificFile != lua.LNil && alvuFile.name != isForSpecificFile.String() {
+				continue
+			}
+
+			bail(alvuFile.ProcessFile(hook))
+			alvuFile.FlushFile()
+		}
+	}
 
 	// right before completion run all hooks again but for the onFinish
-	RunAllHooks(hooksToUse, "OnFinish")
-
-	// cleanup hooks
-	for _, h := range hookCollection {
-		h.Close()
-	}
+	hookCollection.RunAll("OnFinish")
+	hookCollection.Shutdown()
 }
 
 func CollectFilesToProcess(basepath string) []string {
@@ -209,23 +167,27 @@ func CollectFilesToProcess(basepath string) []string {
 	return files
 }
 
-func CollectHooks(basePath, hooksBasePath string) (hooks []string) {
+func CollectHooks(basePath, hooksBasePath string) {
 	if _, err := os.Stat(hooksBasePath); err != nil {
 		return
 	}
-	pathstoprocess, err := os.ReadDir(hooksBasePath)
+	pathsToProcess, err := os.ReadDir(hooksBasePath)
 	if err != nil {
 		panic(err)
 	}
 
-	for _, pathInfo := range pathstoprocess {
+	for _, pathInfo := range pathsToProcess {
 		if !strings.HasSuffix(pathInfo.Name(), ".lua") {
 			continue
 		}
+		hook := NewHook()
 		hookPath := path.Join(hooksBasePath, pathInfo.Name())
-		hooks = append(hooks, hookPath)
+		if err := hook.DoFile(hookPath); err != nil {
+			panic(err)
+		}
+		hookCollection = append(hookCollection, hook)
 	}
-	return
+
 }
 
 func initMDProcessor() {
@@ -240,6 +202,32 @@ func initMDProcessor() {
 			html.WithUnsafe(),
 		),
 	)
+}
+
+type HookCollection []*lua.LState
+
+func (hc HookCollection) Shutdown() {
+	for _, hook := range hc {
+		hook.Close()
+	}
+}
+
+func (hc HookCollection) RunAll(funcName string) {
+	for _, hook := range hc {
+		hookFunc := hook.GetGlobal(funcName)
+
+		if hookFunc == lua.LNil {
+			return
+		}
+
+		if err := hook.CallByParam(lua.P{
+			Fn:      hook.GetGlobal(funcName),
+			NRet:    0,
+			Protect: true,
+		}); err != nil {
+			panic(err)
+		}
+	}
 }
 
 type AlvuFile struct {
@@ -257,9 +245,6 @@ type AlvuFile struct {
 	extras           map[string]interface{}
 }
 
-// ReadFile read the file data for the particualr alvu file
-// FIXME: add in a bufio reader and use that for the processing
-// later
 func (a *AlvuFile) ReadFile() error {
 	filecontent, err := os.ReadFile(a.sourcePath)
 	if err != nil {
@@ -269,9 +254,6 @@ func (a *AlvuFile) ReadFile() error {
 	return nil
 }
 
-// ReadFile read the file data for the particualr alvu file
-// FIXME: should use the bufio reader once `ReadFile` is able to
-// use it
 func (a *AlvuFile) ParseMeta() error {
 	sep := []byte("---")
 	if !bytes.HasPrefix(a.content, sep) {
@@ -424,6 +406,7 @@ func (a *AlvuFile) FlushFile() {
 
 func NewHook() *lua.LState {
 	lState := lua.NewState()
+	luaAlvu.Preload(lState)
 	luajson.Preload(lState)
 	yamlLib.Preload(lState)
 	stringsLib.Preload(lState)
@@ -433,27 +416,5 @@ func NewHook() *lua.LState {
 	} else {
 		lState.SetGlobal("workingdir", lua.LString(basePath))
 	}
-	hookCollection = append(hookCollection, lState)
 	return lState
-}
-
-func RunAllHooks(hooksToUse []string, funcToCall string) {
-	for _, hookPath := range hooksToUse {
-		hook := NewHook()
-		if err := hook.DoFile(hookPath); err != nil {
-			panic(err)
-		}
-
-		hookFunc := hook.GetGlobal(funcToCall)
-
-		if hookFunc != lua.LNil {
-			if err := hook.CallByParam(lua.P{
-				Fn:      hook.GetGlobal(funcToCall),
-				NRet:    0,
-				Protect: true,
-			}); err != nil {
-				panic(err)
-			}
-		}
-	}
 }

@@ -20,7 +20,11 @@ docs_dev: build
 
 pages: docs
 	rm -rf alvu
-	git checkout pages 
-	mv dist/* . 
+	rm -rf .tmp
+	mkdir .tmp
+	mv dist/* .tmp
+	git checkout pages  
+	rm -rf ./*
+	mv .tmp/* .
 	git add -A; git commit -m "update pages"; git push origin pages;
 	git checkout main

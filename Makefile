@@ -15,7 +15,7 @@ demo:
 docs: build 
 	./alvu --path="docs" --baseurl="/alvu/"
 
-docs_dev: build 
+docs_dev: build
 	ls docs/**/* | entr -cr ./alvu --path='./docs'
 
 pages: docs

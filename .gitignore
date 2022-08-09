@@ -2,3 +2,5 @@
 /dist
 /alvu
 /.tmp
+.DS_Store
+/bin

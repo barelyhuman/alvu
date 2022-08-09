@@ -28,3 +28,6 @@ pages: docs
 	mv .tmp/* .
 	git add -A; git commit -m "update pages"; git push origin pages;
 	git checkout main
+
+cross:
+	./scripts/cross-compile.sh

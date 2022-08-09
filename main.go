@@ -115,6 +115,10 @@ func main() {
 	})
 	CollectHooks(basePath, hooksPath)
 	toProcess := CollectFilesToProcess(pagesPath)
+	onDebug(func() {
+		log.Println("printing files to process")
+		log.Println(toProcess)
+	})
 
 	initMDProcessor()
 
@@ -153,11 +157,15 @@ func main() {
 
 			isForSpecificFile := hook.state.GetGlobal("ForFile")
 
-			if isForSpecificFile != lua.LNil && alvuFile.name != isForSpecificFile.String() {
-				continue
+			if isForSpecificFile != lua.LNil {
+				if alvuFile.name == isForSpecificFile.String() {
+					alvuFile.ProcessFile(hook.state)
+				} else {
+					bail(alvuFile.ProcessFile(nil))
+				}
+			} else {
+				bail(alvuFile.ProcessFile(hook.state))
 			}
-
-			bail(alvuFile.ProcessFile(hook.state))
 		}
 		alvuFile.FlushFile()
 	}
@@ -323,6 +331,10 @@ func (a *AlvuFile) ProcessFile(hook *lua.LState) error {
 	defer a.lock.Unlock()
 
 	a.targetName = regexp.MustCompile(`\.md$`).ReplaceAll([]byte(a.name), []byte(".html"))
+	onDebug(func() {
+		log.Println(a.name, " will be changed to ", string(a.targetName))
+	})
+
 	buf := bytes.NewBuffer([]byte(""))
 	mdToHTML := ""
 
@@ -397,6 +409,10 @@ func (a *AlvuFile) FlushFile() {
 	os.MkdirAll(destFolder, os.ModePerm)
 
 	targetFile := strings.Replace(path.Join(a.destPath), a.name, string(a.targetName), 1)
+	onDebug(func() {
+		log.Println("flushing for file: ", a.name, string(a.targetName))
+		log.Println("flusing file: ", targetFile)
+	})
 	f, err := os.Create(targetFile)
 	bail(err)
 	defer f.Sync()
@@ -414,10 +430,15 @@ func (a *AlvuFile) FlushFile() {
 		toHtml.Write(a.writeableContent)
 	}
 
+	onDebug(func() {
+		log.Println("template path: ", a.sourcePath)
+		log.Println("template content: ", toHtml.String())
+	})
+
 	t := template.New(path.Join(a.sourcePath))
 	t.Parse(toHtml.String())
 
-	if writeHeadTail {
+	if writeHeadTail && a.headFile != nil {
 		a.headFile.Seek(0, 0)
 		_, err = io.Copy(f, a.headFile)
 		bail(err)
@@ -437,7 +458,7 @@ func (a *AlvuFile) FlushFile() {
 
 	bail(err)
 
-	if writeHeadTail {
+	if writeHeadTail && a.tailFile != nil {
 		a.tailFile.Seek(0, 0)
 		_, err = io.Copy(f, a.tailFile)
 		bail(err)

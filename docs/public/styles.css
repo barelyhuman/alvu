@@ -205,6 +205,10 @@ pre > code {
   -webkit-text-size-adjust: none;
 }
 
+pre > code {
+  width: 100%;
+}
+
 code,
 kbd {
   background: var(--secondary-bg);

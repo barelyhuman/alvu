@@ -31,6 +31,8 @@ import (
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
 
+	highlighting "github.com/yuin/goldmark-highlighting"
+
 	lua "github.com/yuin/gopher-lua"
 	"gopkg.in/yaml.v3"
 
@@ -42,7 +44,6 @@ var mdProcessor goldmark.Markdown
 var baseurl string
 var basePath string
 var hookCollection HookCollection
-var wg = &sync.WaitGroup{}
 
 type SiteMeta struct {
 	BaseURL string
@@ -58,6 +59,8 @@ func main() {
 	outPathFlag := flag.String("out", "./dist", "`DIR` to output the compiled files to")
 	baseurlFlag := flag.String("baseurl", "/", "`URL` to be used as the root of the project")
 	hooksPathFlag := flag.String("hooks", "./hooks", "`DIR` that contains hooks for the content")
+	enableHighlightingFlag := flag.Bool("highlight", false, "enable highlighting for markdown files")
+	highlightThemeFlag := flag.String("highlight-theme", "bw", "`THEME` to use for highlighting (supports most themes from pygments)")
 
 	flag.Parse()
 
@@ -120,7 +123,7 @@ func main() {
 		log.Println(toProcess)
 	})
 
-	initMDProcessor()
+	initMDProcessor(*enableHighlightingFlag, *highlightThemeFlag)
 
 	onDebug(func() {
 		debugInfo("Running all OnStart hooks")
@@ -235,8 +238,8 @@ func CollectHooks(basePath, hooksBasePath string) {
 
 }
 
-func initMDProcessor() {
-	mdProcessor = goldmark.New(
+func initMDProcessor(highlight bool, theme string) {
+	gmPlugins := []goldmark.Option{
 		goldmark.WithExtensions(extension.GFM, extension.Footnote),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
@@ -246,7 +249,17 @@ func initMDProcessor() {
 			html.WithXHTML(),
 			html.WithUnsafe(),
 		),
-	)
+	}
+
+	if highlight {
+		gmPlugins = append(gmPlugins, goldmark.WithExtensions(
+			highlighting.NewHighlighting(
+				highlighting.WithStyle(theme),
+			),
+		))
+	}
+
+	mdProcessor = goldmark.New(gmPlugins...)
 }
 
 type Hook struct {

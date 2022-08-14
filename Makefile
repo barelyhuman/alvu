@@ -16,7 +16,7 @@ docs: build
 	./alvu --path="docs" --baseurl="/alvu/"
 
 docs_dev: build
-	ls docs/**/* | entr -cr ./alvu --path='./docs'
+	ls docs/**/* | entr -cr ./alvu --highlight --path='./docs'
 
 pages: docs
 	rm -rf alvu

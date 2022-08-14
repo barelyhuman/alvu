@@ -10,6 +10,10 @@ $ alvu -h
 Usage of alvu:
   -baseurl URL
         URL to be used as the root of the project (default "/")
+  -highlight
+        enable highlighting for markdown files
+  -highlight-theme THEME
+        THEME to use for highlighting (supports most themes from pygments) (default "bw")
   -hooks DIR
         DIR that contains hooks for the content (default "./hooks")
   -out DIR

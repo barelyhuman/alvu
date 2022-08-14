@@ -3,7 +3,6 @@ module codeberg.org/reaper/alvu
 go 1.18
 
 require (
-	github.com/alecthomas/chroma v0.10.0
 	github.com/barelyhuman/go v0.1.2
 	github.com/cjoudrey/gluahttp v0.0.0-20201111170219-25003d9adfa9
 	github.com/otiai10/copy v1.7.0
@@ -16,6 +15,7 @@ require (
 )
 
 require (
+	github.com/alecthomas/chroma v0.10.0 // indirect
 	github.com/dlclark/regexp2 v1.4.0 // indirect
 	gopkg.in/yaml.v2 v2.3.0 // indirect
 )

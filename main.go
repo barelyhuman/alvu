@@ -156,6 +156,11 @@ func main() {
 		bail(alvuFile.ReadFile())
 		bail(alvuFile.ParseMeta())
 
+		// If no hooks are present just process the files
+		if len(hookCollection) == 0 {
+			alvuFile.ProcessFile(nil)
+		}
+
 		for _, hook := range hookCollection {
 
 			isForSpecificFile := hook.state.GetGlobal("ForFile")

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"io/fs"
 	"log"
@@ -16,7 +17,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"text/template"
 
 	"github.com/barelyhuman/go/env"
 	ghttp "github.com/cjoudrey/gluahttp"
@@ -431,6 +431,7 @@ func (a *AlvuFile) FlushFile() {
 		log.Println("flushing for file: ", a.name, string(a.targetName))
 		log.Println("flusing file: ", targetFile)
 	})
+
 	f, err := os.Create(targetFile)
 	bail(err)
 	defer f.Sync()
@@ -441,12 +442,24 @@ func (a *AlvuFile) FlushFile() {
 		writeHeadTail = true
 	}
 
-	var toHtml bytes.Buffer
-	if writeHeadTail {
-		mdProcessor.Convert(a.writeableContent, &toHtml)
-	} else {
-		toHtml.Write(a.writeableContent)
+	if writeHeadTail && a.headFile != nil {
+		shouldCopyContentsWithReset(a.headFile, f)
 	}
+
+	var toHtml bytes.Buffer
+	err = mdProcessor.Convert(a.writeableContent, &toHtml)
+	bail(err)
+
+	io.Copy(
+		f, &toHtml,
+	)
+
+	if writeHeadTail && a.tailFile != nil {
+		shouldCopyContentsWithReset(a.tailFile, f)
+	}
+
+	data, err := os.ReadFile(targetFile)
+	bail(err)
 
 	onDebug(func() {
 		log.Println("template path: ", a.sourcePath)
@@ -454,13 +467,9 @@ func (a *AlvuFile) FlushFile() {
 	})
 
 	t := template.New(path.Join(a.sourcePath))
-	t.Parse(toHtml.String())
+	t.Parse(string(data))
 
-	if writeHeadTail && a.headFile != nil {
-		a.headFile.Seek(0, 0)
-		_, err = io.Copy(f, a.headFile)
-		bail(err)
-	}
+	f.Seek(0, 0)
 
 	err = t.Execute(f, struct {
 		Meta   SiteMeta
@@ -475,12 +484,6 @@ func (a *AlvuFile) FlushFile() {
 	})
 
 	bail(err)
-
-	if writeHeadTail && a.tailFile != nil {
-		a.tailFile.Seek(0, 0)
-		_, err = io.Copy(f, a.tailFile)
-		bail(err)
-	}
 }
 
 func NewHook() *lua.LState {
@@ -552,4 +555,10 @@ func mergeMapWithCheck(maps ...any) (source map[string]interface{}) {
 		}
 	}
 	return source
+}
+
+func shouldCopyContentsWithReset(src *os.File, target *os.File) {
+	src.Seek(0, 0)
+	_, err := io.Copy(target, src)
+	bail(err)
 }

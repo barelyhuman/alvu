@@ -14,7 +14,7 @@ var api = map[string]lua.LGFunction{
 // Preload adds json to the given Lua state's package.preload table. After it
 // has been preloaded, it can be loaded using require:
 //
-//  local json = require("json")
+//	local json = require("json")
 func Preload(L *lua.LState) {
 	L.PreloadModule("alvu", Loader)
 }
@@ -69,7 +69,11 @@ func getFilesIndex(pathToIndex string) (paths []string, err error) {
 			if err != nil {
 				return paths, err
 			}
-			paths = append(paths, nestPaths...)
+			withPathPrefix := []string{}
+			for _, _path := range nestPaths {
+				withPathPrefix = append(withPathPrefix, path.Join(f.Name(), _path))
+			}
+			paths = append(paths, withPathPrefix...)
 		} else {
 			paths = append(paths, f.Name())
 		}

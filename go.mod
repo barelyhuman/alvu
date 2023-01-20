@@ -3,7 +3,7 @@ module codeberg.org/reaper/alvu
 go 1.18
 
 require (
-	github.com/barelyhuman/go v0.1.2
+	github.com/barelyhuman/go v0.2.1
 	github.com/cjoudrey/gluahttp v0.0.0-20201111170219-25003d9adfa9
 	github.com/otiai10/copy v1.7.0
 	github.com/vadv/gopher-lua-libs v0.2.0

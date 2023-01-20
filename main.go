@@ -21,6 +21,7 @@ import (
 	"github.com/barelyhuman/go/env"
 	ghttp "github.com/cjoudrey/gluahttp"
 
+	"github.com/barelyhuman/go/color"
 	cp "github.com/otiai10/copy"
 
 	stringsLib "github.com/vadv/gopher-lua-libs/strings"
@@ -39,6 +40,8 @@ import (
 	luaAlvu "codeberg.org/reaper/alvu/lua/alvu"
 	luajson "layeh.com/gopher-json"
 )
+
+const logPrefix = "[alvu] "
 
 var mdProcessor goldmark.Markdown
 var baseurl string
@@ -190,6 +193,9 @@ func main() {
 		debugInfo("On Completions")
 		memuse()
 	})
+
+	cs := &color.ColorString{}
+	fmt.Println(cs.Blue(logPrefix).Green("Compiled ").Cyan("\"" + basePath + "\"").Green(" to ").Cyan("\"" + outPath + "\"").String())
 }
 
 func CollectFilesToProcess(basepath string) []string {
@@ -350,7 +356,7 @@ func (a *AlvuFile) ProcessFile(hook *lua.LState) error {
 
 	a.targetName = regexp.MustCompile(`\.md$`).ReplaceAll([]byte(a.name), []byte(".html"))
 	onDebug(func() {
-		log.Println(a.name, " will be changed to ", string(a.targetName))
+		debugInfo(a.name + " will be changed to " + string(a.targetName))
 	})
 
 	buf := bytes.NewBuffer([]byte(""))
@@ -428,8 +434,8 @@ func (a *AlvuFile) FlushFile() {
 
 	targetFile := strings.Replace(path.Join(a.destPath), a.name, string(a.targetName), 1)
 	onDebug(func() {
-		log.Println("flushing for file: ", a.name, string(a.targetName))
-		log.Println("flusing file: ", targetFile)
+		debugInfo("flushing for file: " + a.name + string(a.targetName))
+		debugInfo("flusing file: " + targetFile)
 	})
 
 	f, err := os.Create(targetFile)
@@ -462,8 +468,7 @@ func (a *AlvuFile) FlushFile() {
 	bail(err)
 
 	onDebug(func() {
-		log.Println("template path: ", a.sourcePath)
-		log.Println("template content: ", toHtml.String())
+		debugInfo("template path: %v", a.sourcePath)
 	})
 
 	t := template.New(path.Join(a.sourcePath))
@@ -517,19 +522,16 @@ func bail(err error) {
 	if err == nil {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "[alvu]: "+err.Error())
+	cs := &color.ColorString{}
+	fmt.Fprintln(os.Stderr, cs.Red(logPrefix).Red(": "+err.Error()).String())
 	panic("")
 }
 
 func debugInfo(msg string, a ...any) {
-	Color := "\u001b[1m\033[36m"
-	Reset := "\033[0m"
-
-	prefix := "[alvu]"
-	prefix = Color + prefix
-	prefix += Reset + " "
-
-	fmt.Fprintf(os.Stdout, prefix+msg+" \n", a...)
+	cs := &color.ColorString{}
+	prefix := logPrefix
+	baseMessage := cs.Reset("").Yellow(prefix).Reset(" ").Gray(msg).String()
+	fmt.Fprintf(os.Stdout, baseMessage+" \n", a...)
 }
 
 func showDebug() bool {

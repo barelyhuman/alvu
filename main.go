@@ -46,6 +46,7 @@ const logPrefix = "[alvu] "
 var mdProcessor goldmark.Markdown
 var baseurl string
 var basePath string
+var outPath string
 var hookCollection HookCollection
 
 type SiteMeta struct {
@@ -64,6 +65,8 @@ func main() {
 	hooksPathFlag := flag.String("hooks", "./hooks", "`DIR` that contains hooks for the content")
 	enableHighlightingFlag := flag.Bool("highlight", false, "enable highlighting for markdown files")
 	highlightThemeFlag := flag.String("highlight-theme", "bw", "`THEME` to use for highlighting (supports most themes from pygments)")
+	serveFlag := flag.Bool("serve", false, "start a local server")
+	portFlag := flag.String("port", "3000", "`PORT` to start the server on")
 
 	flag.Parse()
 
@@ -73,7 +76,7 @@ func main() {
 	publicPath := path.Join(*basePathFlag, "public")
 	headFilePath := path.Join(pagesPath, "_head.html")
 	tailFilePath := path.Join(pagesPath, "_tail.html")
-	outPath := path.Join(*outPathFlag)
+	outPath = path.Join(*outPathFlag)
 	hooksPath := path.Join(*basePathFlag, *hooksPathFlag)
 
 	onDebug(func() {
@@ -196,6 +199,25 @@ func main() {
 
 	cs := &color.ColorString{}
 	fmt.Println(cs.Blue(logPrefix).Green("Compiled ").Cyan("\"" + basePath + "\"").Green(" to ").Cyan("\"" + outPath + "\"").String())
+
+	if *serveFlag {
+		runServer(*portFlag)
+	}
+
+}
+
+func runServer(port string) {
+
+	normalizedPort := port
+
+	if !strings.HasPrefix(normalizedPort, ":") {
+		normalizedPort = ":" + normalizedPort
+	}
+
+	cs := &color.ColorString{}
+	cs.Blue(logPrefix).Green("Serving on").Reset(" ").Cyan(normalizedPort)
+	fmt.Println(cs.String())
+	http.ListenAndServe(normalizedPort, http.HandlerFunc(ServeHandler))
 }
 
 func CollectFilesToProcess(basepath string) []string {
@@ -563,4 +585,35 @@ func shouldCopyContentsWithReset(src *os.File, target *os.File) {
 	src.Seek(0, 0)
 	_, err := io.Copy(target, src)
 	bail(err)
+}
+
+func ServeHandler(rw http.ResponseWriter, req *http.Request) {
+	path := req.URL.Path
+
+	if path == "/" {
+		path = filepath.Join(outPath, "index.html")
+		http.ServeFile(rw, req, path)
+		return
+	}
+
+	file := filepath.Join(outPath, path)
+	info, err := os.Stat(file)
+	if err == nil && info.Mode().IsRegular() {
+		http.ServeFile(rw, req, file)
+		return
+	}
+
+	file = filepath.Join(outPath, path+".html")
+	info, err = os.Stat(file)
+	if err == nil && info.Mode().IsRegular() {
+		http.ServeFile(rw, req, file)
+		return
+	}
+
+	notFoundHandler(rw, req)
+}
+
+func notFoundHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotFound)
+	fmt.Fprint(w, "404, Page not found....")
 }

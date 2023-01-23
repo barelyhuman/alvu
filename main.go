@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"html/template"
@@ -217,7 +218,12 @@ func runServer(port string) {
 	cs := &color.ColorString{}
 	cs.Blue(logPrefix).Green("Serving on").Reset(" ").Cyan(normalizedPort)
 	fmt.Println(cs.String())
-	http.ListenAndServe(normalizedPort, http.HandlerFunc(ServeHandler))
+	err := http.ListenAndServe(normalizedPort, http.HandlerFunc(ServeHandler))
+
+	if strings.Contains(err.Error(), "address already in use") {
+		bail(errors.New("port already in use, use another port with the `-port` flag instead"))
+	}
+
 }
 
 func CollectFilesToProcess(basepath string) []string {

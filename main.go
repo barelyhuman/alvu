@@ -602,21 +602,52 @@ func ServeHandler(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// check if the requested file already exists
 	file := filepath.Join(outPath, path)
 	info, err := os.Stat(file)
-	if err == nil && info.Mode().IsRegular() {
+
+	// if not, check if it's a directory
+	// and if it's a directory, we look for
+	// a index.html inside the directory to return instead
+	if err == nil {
+		if info.Mode().IsDir() {
+			file = filepath.Join(outPath, path, "index.html")
+			_, err := os.Stat(file)
+			if err != nil {
+				notFoundHandler(rw, req)
+				return
+			}
+		}
+
 		http.ServeFile(rw, req, file)
 		return
 	}
 
-	file = filepath.Join(outPath, path+".html")
-	info, err = os.Stat(file)
-	if err == nil && info.Mode().IsRegular() {
+	// if neither a directory or file was found
+	// try a secondary case where the file might be missing
+	// a `.html` extension for cleaner url so append a .html
+	// to look for the file.
+	if err != nil {
+		file := filepath.Join(outPath, normalizeFilePath(path))
+		_, err := os.Stat(file)
+
+		if err != nil {
+			notFoundHandler(rw, req)
+			return
+		}
+
 		http.ServeFile(rw, req, file)
 		return
 	}
 
 	notFoundHandler(rw, req)
+}
+
+func normalizeFilePath(path string) string {
+	if strings.HasSuffix(path, ".html") {
+		return path
+	}
+	return path + ".html"
 }
 
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {

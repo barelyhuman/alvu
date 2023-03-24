@@ -31,6 +31,7 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
 
 	highlighting "github.com/yuin/goldmark-highlighting"
@@ -48,6 +49,7 @@ var mdProcessor goldmark.Markdown
 var baseurl string
 var basePath string
 var outPath string
+var hardWraps bool
 var hookCollection HookCollection
 
 type SiteMeta struct {
@@ -67,6 +69,7 @@ func main() {
 	enableHighlightingFlag := flag.Bool("highlight", false, "enable highlighting for markdown files")
 	highlightThemeFlag := flag.String("highlight-theme", "bw", "`THEME` to use for highlighting (supports most themes from pygments)")
 	serveFlag := flag.Bool("serve", false, "start a local server")
+	hardWrapsFlag := flag.Bool("hard-wrap", true, "enable hard wrapping of elements with `<br>`")
 	portFlag := flag.String("port", "3000", "`PORT` to start the server on")
 
 	flag.Parse()
@@ -79,6 +82,7 @@ func main() {
 	tailFilePath := path.Join(pagesPath, "_tail.html")
 	outPath = path.Join(*outPathFlag)
 	hooksPath := path.Join(*basePathFlag, *hooksPathFlag)
+	hardWraps = *hardWrapsFlag
 
 	onDebug(func() {
 		debugInfo("Opening _head")
@@ -278,15 +282,21 @@ func CollectHooks(basePath, hooksBasePath string) {
 }
 
 func initMDProcessor(highlight bool, theme string) {
+
+	rendererOptions := []renderer.Option{
+		html.WithXHTML(), html.WithUnsafe(),
+	}
+
+	if hardWraps {
+		rendererOptions = append(rendererOptions, html.WithHardWraps())
+	}
 	gmPlugins := []goldmark.Option{
 		goldmark.WithExtensions(extension.GFM, extension.Footnote),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
 		),
 		goldmark.WithRendererOptions(
-			html.WithHardWraps(),
-			html.WithXHTML(),
-			html.WithUnsafe(),
+			rendererOptions...,
 		),
 	}
 

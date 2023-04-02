@@ -39,7 +39,7 @@ Yeah... and no.
 The `_head.html` and `_tail.html` files were used as placeholders for
 repeated layout across your markdown files, this has now been replaced
 by the `_layout.html` file which wraps around your markdown content and
-can be defined as its shown below
+can be defined as shown below
 
 ```go-html-template
 <!DOCTYPE html>
@@ -54,6 +54,10 @@ can be defined as its shown below
 `.Content` can be used as a slot or placeholder to be replaced by the content of each markdown file.
 
 > **Note**: Make sure to remove the spaces between the `{` and `}` in the above code snippet, these were added to avoid getting replaced by the template code
+
+We deprecated `_head.html` and `_tail.html` because they would cause abnormalities in the HTML output causing certain element tags to be duplicated. Which isn't semantically correct, also the template execution for these would end up creating arbitrary string nodes at the end of the HTML, which isn't intentional. 
+
+The fix for this would include writing an HTML dedupe handler, which might be a project in itself considering all the edge cases. It was easier to just let golang templates get what they want, hence the introduction of the `_layout.html` file.
 
 ## Hooks
 

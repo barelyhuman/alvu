@@ -78,10 +78,14 @@ not all keys that you send back are taken into consideration.
 If you did send the above data `name = "reaper"` and would like to access it in
 all templates, you could just do the following
 
-```html
-<p>{{.Data.name}}</p>
+```go-html-template
+<p>
+  { { .Data.name } }
+</p>
 <!-- or if you set it under extras -->
-<p>{{.Extras.name}}</p>
+<p>
+  { { .Extras.name } }
+</p>
 ```
 
 The lua table could nest as much as needed and the same could be accessed in the

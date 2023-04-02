@@ -41,18 +41,19 @@ repeated layout across your markdown files, this has now been replaced
 by the `_layout.html` file which wraps around your markdown content and
 can be defined as its shown below
 
-```html
+```go-html-template
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <!-- head content -->
-  </head>
+  <head></head>
   <body>
-    <!-- {{ .Content }} acts like an empty slot that gets filled with your markdown data -->
-    {{.Content}}
+     { { .Content } }
   </body>
 </html>
 ```
+
+`.Content` can be used as a slot or placeholder to be replaced by the content of each markdown file.
+
+> **Note**: Make sure to remove the spaces between the `{` and `}` in the above code snippet, these were added to avoid getting replaced by the template code
 
 ## Hooks
 
@@ -64,11 +65,12 @@ function, this function receives the data of the file that's currently being pro
 
 So, if `alvu` is processing `index.md` then you will get the name, path, its current content, which you can return as is or change it and that'll override the content for the compiled version of the file.
 
-For example, you can check this very documentation site's source code to check how the navigation is added 
-to each file. 
+For example, you can check this very documentation site's source code to check how the navigation is added
+to each file.
 
 ## Public
+
 Pretty self-explanatory but the `public` folder will copy everything
-put into it to the `dist` folder. This can be used for assets, styles, etc. 
+put into it to the `dist` folder. This can be used for assets, styles, etc.
 
 Let's move forward to [scripting &rarr;]({{.Meta.BaseURL}}02-scripting)

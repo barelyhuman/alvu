@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>alvu | documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/alvu/styles.css" >
+  </head>
+  <body>
+
+<header class="container">
+<nav>
+<p><a href=/alvu/index>..</a></p>
+<p><a href=/alvu/00-readme> readme</a></p>
+<p><a href=/alvu/01-basics> basics</a></p>
+<p><a href=/alvu/02-scripting> scripting</a></p>
+<p><a href=/alvu/03-writers> writers</a></p>
+<p><a href=/alvu/05-CLI> cli</a></p>
+<p><a href=/alvu/06-recipes> recipes</a></p>
+</nav>
+</header>
+<main class="container">
+<h1 id="recipes">Recipes</h1>
+<p><a href="#templates">Jump to Templates</a></p>
+<p>Methods and ways to be able to do basic tasks while working with alvu</p>
+<h2 id="watching-for-changes">Watching for changes</h2>
+<p>I use <a href="https://github.com/eradman/entr">entr</a> as a file notifier which can run arbitrary commands on file changes, which can be done like so to have alvu monitor for files</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span>ls docs/**/* | entr -cr alvu --path=<span style="font-style:italic">&#39;./docs&#39;</span>
+</span></span></code></pre><p>This will list all files in the <code>docs</code> folder (root of an alvu project) and then run the alvu command while specifying the base path to be <code>./docs</code></p>
+<h2 id="importing-other-lua-files">Importing other lua files</h2>
+<p>You'll need to work with lua files that are in a sibling directory
+in the project and you can do so by adding them to the scripts
+<code>package.path</code> like so</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-style:italic">-- specify that you wish to taken in any `.lua` file in the `lib` folder</span>
+</span></span><span style="display:flex;"><span>package.path = package.path .. <span style="font-style:italic">&#34;;../lib/?.lua&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="font-style:italic">-- require lib/utils.lua to use utilities from it</span>
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">local</span> lib = require(<span style="font-style:italic">&#34;lib.utils&#34;</span>)
+</span></span></code></pre><h2 id="string-interpolation">String Interpolation</h2>
+<p>There's no way to directly do string interpolation in lua but is almost always needed so here's how you can implement a small helper for it</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-weight:bold">local</span> <span style="font-weight:bold">function</span> interpolate(s, tab)
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">return</span> (s:gsub(<span style="font-style:italic">&#39;($%b{})&#39;</span>, <span style="font-weight:bold">function</span>(w) <span style="font-weight:bold">return</span> tab[w:sub(3, -2)] <span style="font-weight:bold">or</span> w <span style="font-weight:bold">end</span>))
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">end</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="font-style:italic">-- usage</span>
+</span></span><span style="display:flex;"><span>interpolate(<span style="font-style:italic">&#34;this is a ${message} string&#34;</span>, { message = <span style="font-style:italic">&#34;interpolated&#34;</span> })
+</span></span></code></pre><h2 id="string-functions">String Functions</h2>
+<p>A helper library is injected into all alvu hook files which can be required into the script to help with basic string manipulation and querying</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-weight:bold">local</span> strings = require(<span style="font-style:italic">&#34;strings&#34;</span>)
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">if</span> strings.contains(<span style="font-style:italic">&#34;hello world&#34;</span>, <span style="font-style:italic">&#34;hello&#34;</span>)
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">then</span>
+</span></span><span style="display:flex;"><span>	print(<span style="font-style:italic">&#34;found hello&#34;</span>)
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">end</span>
+</span></span></code></pre><p>You can read more about these from the <a href="https://github.com/vadv/gopher-lua-libs/tree/master/strings">gopher-lua-libs</a> repo.</p>
+<h2 id="get-files-from-a-directory">Get files from a directory</h2>
+<p>If working with blogs and nested data you might wanna get files in a directory and you can use the following function</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-weight:bold">function</span> scandir(directory)
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">local</span> i, t, popen = 0, {}, io.popen
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">local</span> pfile = popen(<span style="font-style:italic">&#39;ls -a &#34;&#39;</span> .. directory .. <span style="font-style:italic">&#39;&#34;&#39;</span>)
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">if</span> pfile <span style="font-weight:bold">then</span>
+</span></span><span style="display:flex;"><span>        <span style="font-weight:bold">for</span> filename <span style="font-weight:bold">in</span> pfile:lines() <span style="font-weight:bold">do</span>
+</span></span><span style="display:flex;"><span>            i = i + 1
+</span></span><span style="display:flex;"><span>            t[i] = filename
+</span></span><span style="display:flex;"><span>        <span style="font-weight:bold">end</span>
+</span></span><span style="display:flex;"><span>        pfile:close()
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">end</span>
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">return</span> t
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">end</span>
+</span></span></code></pre><h2 id="reading--writing-files">Reading / Writing files</h2>
+<p>This can be done with native lua functions but here's a snippet of
+the <code>onFinish</code> hook from <a href="https://github.com/barelyhuman/reaper.is">reaper.is</a>' RSS Feed hook</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-weight:bold">function</span> OnFinish()
+</span></span><span style="display:flex;"><span>    <span style="font-style:italic">-- attempt to open the template file in read mode</span>
+</span></span><span style="display:flex;"><span>	<span style="font-weight:bold">local</span> rss_temp_fd = io.open(<span style="font-style:italic">&#34;dist/rss_tmpl.xml&#34;</span>, <span style="font-style:italic">&#34;r&#34;</span>)
+</span></span><span style="display:flex;"><span>	<span style="font-style:italic">-- attempt to open the final file in write mode</span>
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">local</span> rss_fd = io.open(<span style="font-style:italic">&#34;dist/rss.xml&#34;</span>, <span style="font-style:italic">&#34;w&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="font-style:italic">-- check if the file descriptors are available and usable</span>
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">if</span> rss_temp_fd <span style="font-weight:bold">and</span> rss_fd
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">then</span>
+</span></span><span style="display:flex;"><span>		<span style="font-style:italic">-- read the entire template file&#39;s body</span>
+</span></span><span style="display:flex;"><span>		<span style="font-style:italic">-- which contains the rss &lt;item&gt;&lt;/item&gt; tags</span>
+</span></span><span style="display:flex;"><span>        <span style="font-weight:bold">local</span> body = <span style="font-style:italic">&#34;&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="font-weight:bold">for</span> c <span style="font-weight:bold">in</span> rss_temp_fd:lines() <span style="font-weight:bold">do</span>
+</span></span><span style="display:flex;"><span>            body = body .. <span style="font-style:italic">&#34;</span><span style="font-weight:bold;font-style:italic">\n</span><span style="font-style:italic">&#34;</span> .. c
+</span></span><span style="display:flex;"><span>        <span style="font-weight:bold">end</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="font-style:italic">-- generate a rss file template for the following</span>
+</span></span><span style="display:flex;"><span>		<span style="font-style:italic">-- site data</span>
+</span></span><span style="display:flex;"><span>        <span style="font-weight:bold">local</span> rss_data = rss_template({
+</span></span><span style="display:flex;"><span>            site_name = <span style="font-style:italic">&#34;reaper&#34;</span>,
+</span></span><span style="display:flex;"><span>            site_link = <span style="font-style:italic">&#34;https://reaper.is&#34;</span>,
+</span></span><span style="display:flex;"><span>            site_description = <span style="font-style:italic">&#34;reaper&#39;s rants,notes and stuff&#34;</span>,
+</span></span><span style="display:flex;"><span>            itembody = body
+</span></span><span style="display:flex;"><span>        })
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		<span style="font-style:italic">-- write the whole thing to the final rss.xml file</span>
+</span></span><span style="display:flex;"><span>        rss_fd:write(rss_data)
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">end</span>
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">end</span>
+</span></span></code></pre><h2 id="templates">Templates</h2>
+<p>The most preferred way of using alvu is to avoid having to construct
+hooks and use existing example repositories as the source, this gives us the advantage of not having to spend time writing similar static site generation logic while keeping it easy to extend.</p>
+<h3 id="official-templates">Official Templates</h3>
+<p>TBD</p>
+<h3 id="community-templates">Community Templates</h3>
+<p>Feel free to add in your templates here via PR's on the <a href="http://codeberg.org/reaper/alvu">source repo</a> or
+mailing <a href="mailto:ahoy@barelyhuman.dev">me</a> if you wish to avoid creating a <a href="https://codeberg.org">codeberg.org</a> account</p>
+</main><footer class="container">
+    Built with <a href="http://github.com/barelyhuman/alvu">alvu</a>
+</footer>
+</body>
+</html>dy>
+</html>

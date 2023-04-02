@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>alvu | documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/alvu/styles.css" >
+  </head>
+  <body>
+
+<header class="container">
+<nav>
+<p><a href=/alvu/index>..</a></p>
+<p><a href=/alvu/00-readme> readme</a></p>
+<p><a href=/alvu/01-basics> basics</a></p>
+<p><a href=/alvu/02-scripting> scripting</a></p>
+<p><a href=/alvu/03-writers> writers</a></p>
+<p><a href=/alvu/05-CLI> cli</a></p>
+<p><a href=/alvu/06-recipes> recipes</a></p>
+</nav>
+</header>
+<main class="container">
+<h1 id="scripting">Scripting</h1>
+<p>The whole point of writing this as a CLI instead of just a simple script to
+convert folders of markdown was to be able to add and extend on the basic
+functionality as needed.</p>
+<p>Here's where the <code>hooks</code> folder is being used and this part of the documentation
+is a quick reference on how this works.</p>
+<h2 id="language">Language</h2>
+<p><a href="https://www.lua.org">lua</a> is the language of choice, primarily because it's
+very easy to add in more functionality by just bringing in <code>.lua</code> files from the
+web and adding them to your project.</p>
+<p>Here's what a simple writer function would look like, this function adds a
+<code>Hello World</code> heading to every html/markdown file that alvu would process.</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-style:italic">-- add-hello-world.lua</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="font-style:italic">-- a special json library injected by alvu</span>
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">local</span> json = require(<span style="font-style:italic">&#34;json&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">function</span> Writer(filedata)
+</span></span><span style="display:flex;"><span>    <span style="font-style:italic">-- convert the file&#39;s information into</span>
+</span></span><span style="display:flex;"><span>    <span style="font-style:italic">-- a lua accessible table</span>
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">local</span> source_data = json.decode(filedata)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="font-style:italic">-- concatenate the heading with the rest of the content</span>
+</span></span><span style="display:flex;"><span>    source_data.content = <span style="font-style:italic">&#34;&lt;h1&gt;Hello World&lt;/h1&gt;&#34;</span> .. source_data.content
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="font-style:italic">-- send back serialized json data to the tool</span>
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">return</span> json.encode(source_data)
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">end</span>
+</span></span></code></pre><p>While, the comments might already help you out, let's just lay them down as
+simple points</p>
+<ol>
+<li>You get data from alvu in the <code>Writer</code> function as a serialized json or
+stringified json.</li>
+<li>You can manipulate the data in lua using the helper library <code>json</code></li>
+<li>Return the data as a serialized json as well.</li>
+</ol>
+<p>You'll learn more about helper libraries as we move ahead.</p>
+<h2 id="data-injection">Data Injection</h2>
+<p>There's going to be cases where you might wanna pass back data from the lua
+function to the templates and like if you wish to build an automatic
+<code>index.html</code> file which lists all the posts of your blog from a certain folder.</p>
+<p>This can be done by passing one of two keys in the returned json. <code>data</code> or
+<code>extras</code></p>
+<p>Something like this,</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-weight:bold">local</span> json = require(<span style="font-style:italic">&#34;json&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">function</span> Writer()
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">return</span> json.encode({
+</span></span><span style="display:flex;"><span>        data = {
+</span></span><span style="display:flex;"><span>            name = <span style="font-style:italic">&#34;reaper&#34;</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>        <span style="font-style:italic">-- or </span>
+</span></span><span style="display:flex;"><span>        extras = {
+</span></span><span style="display:flex;"><span>            name = <span style="font-style:italic">&#34;reaper&#34;</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    })
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">end</span>
+</span></span></code></pre><p>You don't have to send back the whole <code>source_content</code> for each file since it's
+only merged when you send something back, else the original is kept as is and
+not all keys that you send back are taken into consideration.</p>
+<p>If you did send the above data <code>name = &quot;reaper&quot;</code> and would like to access it in
+all templates, you could just do the following</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span>&lt;<span style="font-weight:bold">p</span>&gt;&lt;/<span style="font-weight:bold">p</span>&gt;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>&lt;<span style="font-weight:bold">p</span>&gt;&lt;/<span style="font-weight:bold">p</span>&gt;
+</span></span></code></pre><p>The lua table could nest as much as needed and the same could be accessed in the
+templates, but try to avoid it.</p>
+<p>and yes, <strong>all templates</strong> , each hook runs on each template and every
+manipulation cascades on the other so if you are running a lot of hooks, name
+them with numbers (eg: <code>01-add-navigation.lua</code>) if you wish for them to follow a
+certain sequence</p>
+<p><a href="/alvu/03-writers">More about Writers →</a></p>
+</main><footer class="container">
+    Built with <a href="http://github.com/barelyhuman/alvu">alvu</a>
+</footer>
+</body>
+</html>dy>
+</html>

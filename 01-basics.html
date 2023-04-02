@@ -51,25 +51,36 @@ these can be of the following formats.</p>
 <p>Yeah... and no.</p>
 <h3 id="special-files">Special Files</h3>
 <ul>
-<li><code>_head.html</code> - will add the header section to the final HTML</li>
-<li><code>_tail.html</code> - will add the footer section to the final HTML</li>
+<li><code>_head.html</code> - will add the header section to the final HTML (deprecated in v0.2.7)</li>
+<li><code>_tail.html</code> - will add the footer section to the final HTML (deprecated in v0.2.7)</li>
+<li><code>_layout.html</code> - defines a common layout for all files that'll be rendered.</li>
 </ul>
-<p>These files basically execute right before the conversion (if necessary) takes
-place, and is where you'd put your <code>&lt;head&gt;&lt;/head&gt;</code> related stuff.</p>
-<p>Both markdown and html files are template friendly and you can use variables and
-any other Go Template functionality in them.</p>
+<p>The <code>_head.html</code> and <code>_tail.html</code> files were used as placeholders for
+repeated layout across your markdown files, this has now been replaced
+by the <code>_layout.html</code> file which wraps around your markdown content and
+can be defined as its shown below</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="">&lt;!DOCTYPE html&gt;</span>
+</span></span><span style="display:flex;"><span>&lt;<span style="font-weight:bold">html</span> lang=<span style="font-style:italic">&#34;en&#34;</span>&gt;
+</span></span><span style="display:flex;"><span>  &lt;<span style="font-weight:bold">head</span>&gt;&lt;/<span style="font-weight:bold">head</span>&gt;
+</span></span><span style="display:flex;"><span>  &lt;<span style="font-weight:bold">body</span>&gt;
+</span></span><span style="display:flex;"><span>     { { .Content } }
+</span></span><span style="display:flex;"><span>  &lt;/<span style="font-weight:bold">body</span>&gt;
+</span></span><span style="display:flex;"><span>&lt;/<span style="font-weight:bold">html</span>&gt;
+</span></span></code></pre><p><code>.Content</code> can be used as a slot or placeholder to be replaced by the content of each markdown file.</p>
+<blockquote>
+<p><strong>Note</strong>: Make sure to remove the spaces between the <code>{</code> and <code>}</code> in the above code snippet, these were added to avoid getting replaced by the template code</p>
+</blockquote>
 <h2 id="hooks">Hooks</h2>
-<p>The other side of the CLI was to be able to extend simple functionalities when
-needed, and this is where the <code>hooks</code> folder comes.</p>
-<p>This is going to be a collection of <code>.lua</code> files that can each have a <code>Writer</code>
-function which is given data of the file that's being processed.</p>
-<p>So, if I'm processing <code>index.md</code> then you'd get the name, path, current content
-of the file, which you can return as is or change it and that'll over-ride the
-original content in the compiled files.</p>
-<p>For an example, you can check this very documentation site's source code</p>
+<p>The other reason for writing <code>alvu</code> was to be able to extend simple functionalities when
+needed, and this is where the concept of hooks comes in.</p>
+<p>Hooks are a collection of <code>.lua</code> files that can each have a <code>Writer</code>
+function, this function receives the data of the file that's currently being processed.</p>
+<p>So, if <code>alvu</code> is processing <code>index.md</code> then you will get the name, path, its current content, which you can return as is or change it and that'll override the content for the compiled version of the file.</p>
+<p>For example, you can check this very documentation site's source code to check how the navigation is added
+to each file.</p>
 <h2 id="public">Public</h2>
-<p>Pretty self explanatory but the <code>public</code> folder will basically copy everything
-put into it to the <code>dist</code> folder.</p>
+<p>Pretty self-explanatory but the <code>public</code> folder will copy everything
+put into it to the <code>dist</code> folder. This can be used for assets, styles, etc.</p>
 <p>Let's move forward to <a href="/alvu/02-scripting">scripting →</a></p>
 </main>
   <footer class="container">

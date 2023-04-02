@@ -29,13 +29,13 @@
 <main class="container">
 <h1 id="scripting">Scripting</h1>
 <p>The whole point of writing this as a CLI instead of just a simple script to
-convert folders of markdown was to be able to add and extend on the basic
+convert folders of markdown was to be able to add and extend the basic
 functionality as needed.</p>
 <p>Here's where the <code>hooks</code> folder is being used and this part of the documentation
 is a quick reference on how this works.</p>
 <h2 id="language">Language</h2>
 <p><a href="https://www.lua.org">lua</a> is the language of choice, primarily because it's
-very easy to add in more functionality by just bringing in <code>.lua</code> files from the
+very easy to add more functionality by just bringing in <code>.lua</code> files from the
 web and adding them to your project.</p>
 <p>Here's what a simple writer function would look like, this function adds a
 <code>Hello World</code> heading to every html/markdown file that alvu would process.</p>
@@ -55,20 +55,19 @@ web and adding them to your project.</p>
 </span></span><span style="display:flex;"><span>    <span style="font-style:italic">-- send back serialized json data to the tool</span>
 </span></span><span style="display:flex;"><span>    <span style="font-weight:bold">return</span> json.encode(source_data)
 </span></span><span style="display:flex;"><span><span style="font-weight:bold">end</span>
-</span></span></code></pre><p>While, the comments might already help you out, let's just lay them down as
+</span></span></code></pre><p>While the comments might already help you out, let's just lay them down as
 simple points</p>
 <ol>
-<li>You get data from alvu in the <code>Writer</code> function as a serialized json or
-stringified json.</li>
+<li>You get data from alvu in the <code>Writer</code> function as a serialized/stringified JSON.</li>
 <li>You can manipulate the data in lua using the helper library <code>json</code></li>
-<li>Return the data as a serialized json as well.</li>
+<li>Return the data as a serialized JSON, so the modifications can be processed.</li>
 </ol>
 <p>You'll learn more about helper libraries as we move ahead.</p>
 <h2 id="data-injection">Data Injection</h2>
-<p>There's going to be cases where you might wanna pass back data from the lua
-function to the templates and like if you wish to build an automatic
-<code>index.html</code> file which lists all the posts of your blog from a certain folder.</p>
-<p>This can be done by passing one of two keys in the returned json. <code>data</code> or
+<p>There are going to be cases where you might wanna pass back data from the lua
+function to the templates and if you wish to build an automatic
+<code>index.html</code> file that lists all the posts of your blog from a certain folder.</p>
+<p>This can be done by passing one of two keys in the returned JSON. <code>data</code> or
 <code>extras</code></p>
 <p>Something like this,</p>
 <pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-weight:bold">local</span> json = require(<span style="font-style:italic">&#34;json&#34;</span>)
@@ -78,7 +77,7 @@ function to the templates and like if you wish to build an automatic
 </span></span><span style="display:flex;"><span>        data = {
 </span></span><span style="display:flex;"><span>            name = <span style="font-style:italic">&#34;reaper&#34;</span>
 </span></span><span style="display:flex;"><span>        }
-</span></span><span style="display:flex;"><span>        <span style="font-style:italic">-- or </span>
+</span></span><span style="display:flex;"><span>        <span style="font-style:italic">-- or</span>
 </span></span><span style="display:flex;"><span>        extras = {
 </span></span><span style="display:flex;"><span>            name = <span style="font-style:italic">&#34;reaper&#34;</span>
 </span></span><span style="display:flex;"><span>        }
@@ -89,16 +88,46 @@ only merged when you send something back, else the original is kept as is and
 not all keys that you send back are taken into consideration.</p>
 <p>If you did send the above data <code>name = &quot;reaper&quot;</code> and would like to access it in
 all templates, you could just do the following</p>
-<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span>&lt;<span style="font-weight:bold">p</span>&gt;&lt;/<span style="font-weight:bold">p</span>&gt;
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span>&lt;<span style="font-weight:bold">p</span>&gt;
+</span></span><span style="display:flex;"><span>  { { .Data.name } }
+</span></span><span style="display:flex;"><span>&lt;/<span style="font-weight:bold">p</span>&gt;
 </span></span><span style="display:flex;"><span>
-</span></span><span style="display:flex;"><span>&lt;<span style="font-weight:bold">p</span>&gt;&lt;/<span style="font-weight:bold">p</span>&gt;
+</span></span><span style="display:flex;"><span>&lt;<span style="font-weight:bold">p</span>&gt;
+</span></span><span style="display:flex;"><span>  { { .Extras.name } }
+</span></span><span style="display:flex;"><span>&lt;/<span style="font-weight:bold">p</span>&gt;
 </span></span></code></pre><p>The lua table could nest as much as needed and the same could be accessed in the
 templates, but try to avoid it.</p>
-<p>and yes, <strong>all templates</strong> , each hook runs on each template and every
+<p>and yes, <strong>all templates</strong>, each hook runs on each template and every
 manipulation cascades on the other so if you are running a lot of hooks, name
-them with numbers (eg: <code>01-add-navigation.lua</code>) if you wish for them to follow a
+them with numbers (eg: <code>01-add-navigation.lua</code> ) if you wish for them to follow a
 certain sequence</p>
-<p><a href="/alvu/03-writers">More about Writers →</a></p>
+<h2 id="single-file-hooks">Single File Hooks</h2>
+<p>In most cases you use hooks for common functionality but there's definitely cases
+where just one file needs to be processed with hook and that's easily doable with
+alvu.</p>
+<p>You use the <code>ForFile</code> global value in the lua hook and the hook will only run for that
+file. An example of this would look something like this.</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-style:italic">---@diagnostic disable-next-line: undefined-global</span>
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">local</span> wdir = workingdir
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">local</span> json = require(<span style="font-style:italic">&#34;json&#34;</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>ForFile = <span style="font-style:italic">&#34;00-readme.md&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">function</span> Writer(filedata)
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">local</span> sourcedata = json.decode(filedata)
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">if</span> sourcedata.name == <span style="font-style:italic">&#34;00-readme.html&#34;</span>
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">then</span>
+</span></span><span style="display:flex;"><span>        <span style="font-weight:bold">local</span> f = assert(io.open(wdir..<span style="font-style:italic">&#34;/../readme.md&#34;</span>, <span style="font-style:italic">&#34;rb&#34;</span>))
+</span></span><span style="display:flex;"><span>        <span style="font-weight:bold">local</span> content = f:read(<span style="font-style:italic">&#34;*all&#34;</span>)
+</span></span><span style="display:flex;"><span>        f:close()
+</span></span><span style="display:flex;"><span>        sourcedata.content = content
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">end</span>
+</span></span><span style="display:flex;"><span>    <span style="font-weight:bold">return</span> json.encode(sourcedata)
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">end</span>
+</span></span></code></pre><p>The above only runs for the file <code>00-readme.md</code> and is responsible for copying the contents
+of the <code>readme.md</code> and overwriting the <code>00-readme.md</code> file's content with it at <strong>build time</strong></p>
+<p><a href="/alvu/03-writers">More about Writers → </a></p>
 </main>
   <footer class="container">
     Built with <a href="http://github.com/barelyhuman/alvu">alvu</a>

@@ -52,8 +52,21 @@ var outPath string
 var hardWraps bool
 var hookCollection HookCollection
 
+var reservedFiles []string = []string{"_head.html", "_tail.html", "_layout.html"}
+
 type SiteMeta struct {
 	BaseURL string
+}
+
+type PageRenderData struct {
+	Meta   SiteMeta
+	Data   map[string]interface{}
+	Extras map[string]interface{}
+}
+
+type LayoutRenderData struct {
+	PageRenderData
+	Content template.HTML
 }
 
 func main() {
@@ -79,10 +92,14 @@ func main() {
 	pagesPath := path.Join(*basePathFlag, "pages")
 	publicPath := path.Join(*basePathFlag, "public")
 	headFilePath := path.Join(pagesPath, "_head.html")
+	baseFilePath := path.Join(pagesPath, "_layout.html")
 	tailFilePath := path.Join(pagesPath, "_tail.html")
 	outPath = path.Join(*outPathFlag)
 	hooksPath := path.Join(*basePathFlag, *hooksPathFlag)
 	hardWraps = *hardWrapsFlag
+
+	headTailDeprecationWarning := color.ColorString{}
+	headTailDeprecationWarning.Yellow(logPrefix).Yellow("[WARN] use of _tail.html and _head.html is deprecated, please use _layout.html instead")
 
 	onDebug(func() {
 		debugInfo("Opening _head")
@@ -92,6 +109,19 @@ func main() {
 	if err != nil {
 		if err == fs.ErrNotExist {
 			log.Println("no _head.html found,skipping")
+		}
+	} else {
+		fmt.Println(headTailDeprecationWarning.String())
+	}
+
+	onDebug(func() {
+		debugInfo("Opening _layout")
+		memuse()
+	})
+	baseFileFd, err := os.Open(baseFilePath)
+	if err != nil {
+		if err == fs.ErrNotExist {
+			log.Println("no _layout.html found,skipping")
 		}
 	}
 
@@ -104,6 +134,8 @@ func main() {
 		if err == fs.ErrNotExist {
 			log.Println("no _tail.html found, skipping")
 		}
+	} else {
+		fmt.Println(headTailDeprecationWarning.String())
 	}
 
 	onDebug(func() {
@@ -154,14 +186,15 @@ func main() {
 		destFilePath := strings.Replace(toProcessItem, pagesPath, outPath, 1)
 
 		alvuFile := &AlvuFile{
-			lock:       &sync.Mutex{},
-			sourcePath: toProcessItem,
-			destPath:   destFilePath,
-			name:       fileName,
-			headFile:   headFileFd,
-			tailFile:   tailFileFd,
-			data:       map[string]interface{}{},
-			extras:     map[string]interface{}{},
+			lock:         &sync.Mutex{},
+			sourcePath:   toProcessItem,
+			destPath:     destFilePath,
+			name:         fileName,
+			headFile:     headFileFd,
+			tailFile:     tailFileFd,
+			baseTemplate: baseFileFd,
+			data:         map[string]interface{}{},
+			extras:       map[string]interface{}{},
 		}
 
 		bail(alvuFile.ReadFile())
@@ -241,7 +274,7 @@ func CollectFilesToProcess(basepath string) []string {
 	for _, pathInfo := range pathstoprocess {
 		_path := path.Join(basepath, pathInfo.Name())
 
-		if pathInfo.Name() == "_head.html" || pathInfo.Name() == "_tail.html" {
+		if Contains(reservedFiles, pathInfo.Name()) {
 			continue
 		}
 
@@ -250,6 +283,7 @@ func CollectFilesToProcess(basepath string) []string {
 		} else {
 			files = append(files, _path)
 		}
+
 	}
 
 	return files
@@ -284,7 +318,8 @@ func CollectHooks(basePath, hooksBasePath string) {
 func initMDProcessor(highlight bool, theme string) {
 
 	rendererOptions := []renderer.Option{
-		html.WithXHTML(), html.WithUnsafe(),
+		html.WithXHTML(),
+		html.WithUnsafe(),
 	}
 
 	if hardWraps {
@@ -352,6 +387,7 @@ type AlvuFile struct {
 	writeableContent []byte
 	headFile         *os.File
 	tailFile         *os.File
+	baseTemplate     *os.File
 	targetName       []byte
 	data             map[string]interface{}
 	extras           map[string]interface{}
@@ -482,7 +518,7 @@ func (a *AlvuFile) FlushFile() {
 
 	writeHeadTail := false
 
-	if filepath.Ext(a.sourcePath) == ".md" || filepath.Ext(a.sourcePath) == "html" {
+	if a.baseTemplate == nil && (filepath.Ext(a.sourcePath) == ".md" || filepath.Ext(a.sourcePath) == "html") {
 		writeHeadTail = true
 	}
 
@@ -490,11 +526,7 @@ func (a *AlvuFile) FlushFile() {
 		shouldCopyContentsWithReset(a.headFile, f)
 	}
 
-	renderData := struct {
-		Meta   SiteMeta
-		Data   map[string]interface{}
-		Extras map[string]interface{}
-	}{
+	renderData := PageRenderData{
 		Meta: SiteMeta{
 			BaseURL: baseurl,
 		},
@@ -502,22 +534,41 @@ func (a *AlvuFile) FlushFile() {
 		Extras: a.extras,
 	}
 
-	var preMarkdown bytes.Buffer
-	preTemplate := template.New("temporary_pre_template")
-	preTemplate.Parse(string(a.writeableContent))
-	err = preTemplate.Execute(&preMarkdown, renderData)
+	// Run the Markdown file through the conversion
+	// process to be able to use template variables in
+	// the markdown instead of writing them in
+	// raw HTML
+	var preConvertHTML bytes.Buffer
+	preConvertTmpl := template.New("temporary_pre_template")
+	preConvertTmpl.Parse(string(a.writeableContent))
+	err = preConvertTmpl.Execute(&preConvertHTML, renderData)
 	bail(err)
 
 	var toHtml bytes.Buffer
-
-	err = mdProcessor.Convert(preMarkdown.Bytes(), &toHtml)
+	err = mdProcessor.Convert(preConvertHTML.Bytes(), &toHtml)
 	bail(err)
+
+	layoutData := LayoutRenderData{
+		PageRenderData: renderData,
+		Content:        template.HTML(toHtml.Bytes()),
+	}
+
+	// If a layout file was found
+	// write the converted html content into the
+	// layout template file
+	if a.baseTemplate != nil {
+		layout := template.New("layout")
+		layoutTemplateData := string(readFileToBytes(a.baseTemplate))
+		toHtml.Reset()
+		layout.Parse(layoutTemplateData)
+		layout.Execute(&toHtml, layoutData)
+	}
 
 	io.Copy(
 		f, &toHtml,
 	)
 
-	if writeHeadTail && a.tailFile != nil {
+	if writeHeadTail && a.tailFile != nil && a.baseTemplate == nil {
 		shouldCopyContentsWithReset(a.tailFile, f)
 	}
 
@@ -553,7 +604,6 @@ func NewHook() *lua.LState {
 }
 
 // UTILS
-
 func memuse() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -603,6 +653,14 @@ func mergeMapWithCheck(maps ...any) (source map[string]interface{}) {
 		}
 	}
 	return source
+}
+
+func readFileToBytes(fd *os.File) []byte {
+	buf := &bytes.Buffer{}
+	fd.Seek(0, 0)
+	_, err := io.Copy(buf, fd)
+	bail(err)
+	return buf.Bytes()
 }
 
 func shouldCopyContentsWithReset(src *os.File, target *os.File) {
@@ -671,4 +729,13 @@ func normalizeFilePath(path string) string {
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 	fmt.Fprint(w, "404, Page not found....")
+}
+
+func Contains(collection []string, item string) bool {
+	for _, x := range collection {
+		if item == x {
+			return true
+		}
+	}
+	return false
 }

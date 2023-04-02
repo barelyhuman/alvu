@@ -16,4 +16,4 @@ rather tight flow made me think this'd work well.
 As always, a tiny little tool built for me and hopefully someday someone else
 might like it.
 
-Well, let's head to [the basics &rarr;](01-the-basics)
+Well, let's head to [the basics &rarr;]({{.Meta.BaseURL}}01-basics)

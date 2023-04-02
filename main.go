@@ -39,7 +39,7 @@ import (
 	lua "github.com/yuin/gopher-lua"
 	"gopkg.in/yaml.v3"
 
-	luaAlvu "codeberg.org/reaper/alvu/lua/alvu"
+	luaAlvu "github.com/barelyhuman/alvu/lua/alvu"
 	luajson "layeh.com/gopher-json"
 )
 

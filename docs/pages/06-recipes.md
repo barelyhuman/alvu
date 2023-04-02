@@ -119,9 +119,9 @@ hooks and use existing example repositories as the source, this gives us the adv
 
 ### Official Templates
 
-TBD
+[alvu-foam-template](https://github.com/barelyhuman/alvu-foam-template) - Foam plugin template for writing a wiki styled website
 
 ### Community Templates
 
-Feel free to add in your templates here via PR's on the [source repo](http://codeberg.org/reaper/alvu) or
-mailing [me](mailto:ahoy@barelyhuman.dev) if you wish to avoid creating a [codeberg.org](https://codeberg.org) account
+Feel free to add in your templates here via PR's on the [source repo](http://github.com/barelyhuman/alvu) or
+mailing [me](mailto:ahoy@barelyhuman.dev)

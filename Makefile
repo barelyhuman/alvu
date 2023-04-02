@@ -13,10 +13,10 @@ demo:
 	go run . --path lab
 
 docs: build 
-	./alvu --path="docs" --baseurl="/alvu/"
+	./alvu --path="docs" --baseurl="/alvu/" --highlight --hard-wrap=false
 
 docs_dev: build
-	ls docs/**/* | entr -cr ./alvu --highlight --path='./docs'
+	ls docs/**/* | entr -cr ./alvu --highlight --hard-wrap=false --serve --path='./docs'
 
 pages: docs
 	rm -rf alvu

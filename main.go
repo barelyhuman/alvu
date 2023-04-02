@@ -490,8 +490,27 @@ func (a *AlvuFile) FlushFile() {
 		shouldCopyContentsWithReset(a.headFile, f)
 	}
 
+	renderData := struct {
+		Meta   SiteMeta
+		Data   map[string]interface{}
+		Extras map[string]interface{}
+	}{
+		Meta: SiteMeta{
+			BaseURL: baseurl,
+		},
+		Data:   a.data,
+		Extras: a.extras,
+	}
+
+	var preMarkdown bytes.Buffer
+	preTemplate := template.New("temporary_pre_template")
+	preTemplate.Parse(string(a.writeableContent))
+	err = preTemplate.Execute(&preMarkdown, renderData)
+	bail(err)
+
 	var toHtml bytes.Buffer
-	err = mdProcessor.Convert(a.writeableContent, &toHtml)
+
+	err = mdProcessor.Convert(preMarkdown.Bytes(), &toHtml)
 	bail(err)
 
 	io.Copy(
@@ -514,18 +533,7 @@ func (a *AlvuFile) FlushFile() {
 
 	f.Seek(0, 0)
 
-	err = t.Execute(f, struct {
-		Meta   SiteMeta
-		Data   map[string]interface{}
-		Extras map[string]interface{}
-	}{
-		Meta: SiteMeta{
-			BaseURL: baseurl,
-		},
-		Data:   a.data,
-		Extras: a.extras,
-	})
-
+	err = t.Execute(f, renderData)
 	bail(err)
 }
 

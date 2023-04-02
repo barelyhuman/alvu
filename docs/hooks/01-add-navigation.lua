@@ -37,7 +37,7 @@ function Writer(filedata)
 <nav>
 {{$baseurl:=.Meta.BaseURL}}
 {{range .Data.index}}
-    <a href={{print $baseurl .slug}}>{{.name}}</a>
+<a href={{print $baseurl .slug}}>{{.name}}</a>
 {{end}}
 </nav>
 </header>

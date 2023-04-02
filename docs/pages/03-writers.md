@@ -23,7 +23,7 @@ sure you order the hooks with file names
 
 ## `Writer`
 
-The [Scripting](02-scripting) section, covers most of what this writer does but
+The [Scripting]({{.Meta.BaseURL}}02-scripting) section, covers most of what this writer does but
 to reiterate, the `Writer` hooks are called for everyfile in the `pages`
 directory and allow you to manipulate the content of the file before it gets
 compiled
@@ -33,3 +33,5 @@ compiled
 This hook is triggered right after all the processing as completed and the files
 have been compiled. This is primarily for you to be able to run cleanup tasks
 but is not limited to that.
+
+[Read the CLI reference &rarr;]({{.Meta.BaseURL}}05-CLI)

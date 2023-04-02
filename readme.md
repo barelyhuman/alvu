@@ -9,12 +9,12 @@
 - You'll need `curl` installed on your system
 
 ```sh
-curl -sf https://goblin.barelyhuman.xyz/codeberg.org/reaper/alvu |sh
+curl -sf https://goblin.barelyhuman.xyz/github.com/barelyhuman/alvu |sh
 ```
 
 #### From Source / Language tools
 
-- you'll need go lang installed and it's binary path added to your `PATH` env
+- You'll need go lang installed and its binary path added to your `PATH` env
   variable
 
 ```sh

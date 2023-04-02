@@ -32,32 +32,43 @@ Yeah... and no.
 
 ### Special Files
 
-- `_head.html` - will add the header section to the final HTML
-- `_tail.html` - will add the footer section to the final HTML
+- `_head.html` - will add the header section to the final HTML (deprecated in v0.2.7)
+- `_tail.html` - will add the footer section to the final HTML (deprecated in v0.2.7)
+- `_layout.html` - defines a common layout for all files that'll be rendered.
 
-These files basically execute right before the conversion (if necessary) takes
-place, and is where you'd put your `<head></head>` related stuff.
+The `_head.html` and `_tail.html` files were used as placeholders for
+repeated layout across your markdown files, this has now been replaced
+by the `_layout.html` file which wraps around your markdown content and
+can be defined as its shown below
 
-Both markdown and html files are template friendly and you can use variables and
-any other Go Template functionality in them.
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- head content -->
+  </head>
+  <body>
+    <!-- {{ .Content }} acts like an empty slot that gets filled with your markdown data -->
+    {{.Content}}
+  </body>
+</html>
+```
 
 ## Hooks
 
-The other side of the CLI was to be able to extend simple functionalities when
-needed, and this is where the `hooks` folder comes.
+The other reason for writing `alvu` was to be able to extend simple functionalities when
+needed, and this is where the concept of hooks comes in.
 
-This is going to be a collection of `.lua` files that can each have a `Writer`
-function which is given data of the file that's being processed.
+Hooks are a collection of `.lua` files that can each have a `Writer`
+function, this function receives the data of the file that's currently being processed.
 
-So, if I'm processing `index.md` then you'd get the name, path, current content
-of the file, which you can return as is or change it and that'll over-ride the
-original content in the compiled files.
+So, if `alvu` is processing `index.md` then you will get the name, path, its current content, which you can return as is or change it and that'll override the content for the compiled version of the file.
 
-For an example, you can check this very documentation site's source code
+For example, you can check this very documentation site's source code to check how the navigation is added 
+to each file. 
 
 ## Public
-
-Pretty self explanatory but the `public` folder will basically copy everything
-put into it to the `dist` folder.
+Pretty self-explanatory but the `public` folder will copy everything
+put into it to the `dist` folder. This can be used for assets, styles, etc. 
 
 Let's move forward to [scripting &rarr;]({{.Meta.BaseURL}}02-scripting)

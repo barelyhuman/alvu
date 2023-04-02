@@ -58,7 +58,7 @@ these can be of the following formats.</p>
 <p>The <code>_head.html</code> and <code>_tail.html</code> files were used as placeholders for
 repeated layout across your markdown files, this has now been replaced
 by the <code>_layout.html</code> file which wraps around your markdown content and
-can be defined as its shown below</p>
+can be defined as shown below</p>
 <pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="">&lt;!DOCTYPE html&gt;</span>
 </span></span><span style="display:flex;"><span>&lt;<span style="font-weight:bold">html</span> lang=<span style="font-style:italic">&#34;en&#34;</span>&gt;
 </span></span><span style="display:flex;"><span>  &lt;<span style="font-weight:bold">head</span>&gt;&lt;/<span style="font-weight:bold">head</span>&gt;
@@ -70,6 +70,8 @@ can be defined as its shown below</p>
 <blockquote>
 <p><strong>Note</strong>: Make sure to remove the spaces between the <code>{</code> and <code>}</code> in the above code snippet, these were added to avoid getting replaced by the template code</p>
 </blockquote>
+<p>We deprecated <code>_head.html</code> and <code>_tail.html</code> because they would cause abnormalities in the HTML output causing certain element tags to be duplicated. Which isn't semantically correct, also the template execution for these would end up creating arbitrary string nodes at the end of the HTML, which isn't intentional.</p>
+<p>The fix for this would include writing an HTML dedupe handler, which might be a project in itself considering all the edge cases. It was easier to just let golang templates get what they want, hence the introduction of the <code>_layout.html</code> file.</p>
 <h2 id="hooks">Hooks</h2>
 <p>The other reason for writing <code>alvu</code> was to be able to extend simple functionalities when
 needed, and this is where the concept of hooks comes in.</p>

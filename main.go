@@ -7,6 +7,8 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	textTmpl "text/template"
+
 	"io"
 	"io/fs"
 	"log"
@@ -539,7 +541,7 @@ func (a *AlvuFile) FlushFile() {
 	// the markdown instead of writing them in
 	// raw HTML
 	var preConvertHTML bytes.Buffer
-	preConvertTmpl := template.New("temporary_pre_template")
+	preConvertTmpl := textTmpl.New("temporary_pre_template")
 	preConvertTmpl.Parse(string(a.writeableContent))
 	err = preConvertTmpl.Execute(&preConvertHTML, renderData)
 	bail(err)

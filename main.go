@@ -23,6 +23,7 @@ import (
 
 	"github.com/barelyhuman/go/env"
 	ghttp "github.com/cjoudrey/gluahttp"
+	"github.com/fsnotify/fsnotify"
 
 	"github.com/barelyhuman/go/color"
 	cp "github.com/otiai10/copy"
@@ -42,6 +43,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	luaAlvu "github.com/barelyhuman/alvu/lua/alvu"
+	"golang.org/x/net/websocket"
 	luajson "layeh.com/gopher-json"
 )
 
@@ -53,6 +55,7 @@ var basePath string
 var outPath string
 var hardWraps bool
 var hookCollection HookCollection
+var reloadCh = []chan bool{}
 
 var reservedFiles []string = []string{"_head.html", "_tail.html", "_layout.html"}
 
@@ -178,6 +181,8 @@ func main() {
 
 	prefixSlashPath := regexp.MustCompile(`^\/`)
 
+	watcher := NewWatcher()
+
 	onDebug(func() {
 		debugInfo("Processing Files")
 		memuse()
@@ -198,6 +203,8 @@ func main() {
 			data:         map[string]interface{}{},
 			extras:       map[string]interface{}{},
 		}
+
+		watcher.AddFile(alvuFile)
 
 		bail(alvuFile.ReadFile())
 		bail(alvuFile.ParseMeta())
@@ -229,7 +236,6 @@ func main() {
 	})
 	// right before completion run all hooks again but for the onFinish
 	hookCollection.RunAll("OnFinish")
-	hookCollection.Shutdown()
 
 	onDebug(func() {
 		runtime.GC()
@@ -241,13 +247,14 @@ func main() {
 	fmt.Println(cs.Blue(logPrefix).Green("Compiled ").Cyan("\"" + basePath + "\"").Green(" to ").Cyan("\"" + outPath + "\"").String())
 
 	if *serveFlag {
+		watcher.StartWatching()
 		runServer(*portFlag)
 	}
 
+	hookCollection.Shutdown()
 }
 
 func runServer(port string) {
-
 	normalizedPort := port
 
 	if !strings.HasPrefix(normalizedPort, ":") {
@@ -257,12 +264,15 @@ func runServer(port string) {
 	cs := &color.ColorString{}
 	cs.Blue(logPrefix).Green("Serving on").Reset(" ").Cyan(normalizedPort)
 	fmt.Println(cs.String())
-	err := http.ListenAndServe(normalizedPort, http.HandlerFunc(ServeHandler))
+
+	http.Handle("/", http.HandlerFunc(ServeHandler))
+	AddWebsocketHandler()
+
+	err := http.ListenAndServe(normalizedPort, nil)
 
 	if strings.Contains(err.Error(), "address already in use") {
 		bail(errors.New("port already in use, use another port with the `-port` flag instead"))
 	}
-
 }
 
 func CollectFilesToProcess(basepath string) []string {
@@ -721,6 +731,52 @@ func ServeHandler(rw http.ResponseWriter, req *http.Request) {
 	notFoundHandler(rw, req)
 }
 
+// _webSocketHandler Internal function to setup a listener loop
+// for the live reload setup
+func _webSocketHandler(ws *websocket.Conn) {
+	reloadCh = append(reloadCh, make(chan bool, 1))
+	currIndex := len(reloadCh) - 1
+
+	defer ws.Close()
+
+	for range reloadCh[currIndex] {
+		err := websocket.Message.Send(ws, "reload")
+		if err != nil {
+			log.Printf("Error sending message: %s", err.Error())
+			break
+		}
+		onDebug(func() {
+			debugInfo("Reload message sent")
+		})
+	}
+
+}
+
+func AddWebsocketHandler() {
+	wsHandler := websocket.Handler(_webSocketHandler)
+
+	// Use a custom HTTP handler function to upgrade the HTTP request to WebSocket
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		// Check the request's 'Upgrade' header to see if it's a WebSocket request
+		if r.Header.Get("Upgrade") != "websocket" {
+			http.Error(w, "Not a WebSocket handshake request", http.StatusBadRequest)
+			return
+		}
+
+		// Upgrade the HTTP connection to a WebSocket connection
+		wsHandler.ServeHTTP(w, r)
+	})
+
+}
+
+// _clientNotifyReload Internal function to
+// report changes to all possible reload channels
+func _clientNotifyReload() {
+	for ind := range reloadCh {
+		reloadCh[ind] <- true
+	}
+}
+
 func normalizeFilePath(path string) string {
 	if strings.HasSuffix(path, ".html") {
 		return path
@@ -740,4 +796,97 @@ func Contains(collection []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// Watcher , create an interface over the fsnotify watcher
+// to be able to run alvu compile processes again
+// FIXME: redundant compile process for the files
+type Watcher struct {
+	notify *fsnotify.Watcher
+	files  []*AlvuFile
+}
+
+func NewWatcher() *Watcher {
+	watcher := &Watcher{}
+	notifier, err := fsnotify.NewWatcher()
+	bail(err)
+	watcher.notify = notifier
+	return watcher
+}
+
+func (w *Watcher) AddFile(file *AlvuFile) {
+	w.files = append(w.files, file)
+	err := w.notify.Add(file.sourcePath)
+	bail(err)
+}
+
+func (w *Watcher) Compile() {
+	for ind := range w.files {
+		alvuFile := w.files[ind]
+		bail(alvuFile.ReadFile())
+		bail(alvuFile.ParseMeta())
+
+		// If no hooks are present just process the files
+		if len(hookCollection) == 0 {
+			alvuFile.ProcessFile(nil)
+		}
+
+		for _, hook := range hookCollection {
+
+			isForSpecificFile := hook.state.GetGlobal("ForFile")
+
+			if isForSpecificFile != lua.LNil {
+				if alvuFile.name == isForSpecificFile.String() {
+					alvuFile.ProcessFile(hook.state)
+				} else {
+					bail(alvuFile.ProcessFile(nil))
+				}
+			} else {
+				bail(alvuFile.ProcessFile(hook.state))
+			}
+		}
+
+		alvuFile.FlushFile()
+	}
+
+	hookCollection.RunAll("OnFinish")
+}
+
+func (w *Watcher) StartWatching() {
+
+	recompilingText := &color.ColorString{}
+	recompilingText.Blue(logPrefix).Gray("Recompiling...").Reset(" ")
+
+	recompiledText := &color.ColorString{}
+	recompiledText.Blue(logPrefix).Green("Recompiled!").Reset(" ")
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-w.notify.Events:
+				if !ok {
+					return
+				}
+
+				onDebug(func() {
+					debugInfo("Events registered")
+				})
+
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					onDebug(func() {
+						debugInfo("File Changed")
+					})
+					fmt.Println(recompilingText.String())
+					w.Compile()
+					_clientNotifyReload()
+					fmt.Println(recompiledText.String())
+				}
+			case err, ok := <-w.notify.Errors:
+				if !ok {
+					return
+				}
+				fmt.Println("Error happened 😢", err)
+			}
+		}
+	}()
 }

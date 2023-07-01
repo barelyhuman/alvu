@@ -205,7 +205,9 @@ func main() {
 			extras:       map[string]interface{}{},
 		}
 
-		watcher.AddFile(alvuFile)
+		if *serveFlag {
+			watcher.AddFile(alvuFile)
+		}
 
 		bail(alvuFile.ReadFile())
 		bail(alvuFile.ParseMeta())

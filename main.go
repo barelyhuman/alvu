@@ -81,10 +81,21 @@ type LayoutRenderData struct {
 type Alvu struct {
 	publicPath string
 	files      []*AlvuFile
+	filesIndex []string
 }
 
 func (al *Alvu) AddFile(file *AlvuFile) {
 	al.files = append(al.files, file)
+	al.filesIndex = append(al.filesIndex, file.name)
+}
+
+func (al *Alvu) IsAlvuFile(filePath string) bool {
+	for _, af := range al.filesIndex {
+		if af == filePath {
+			return true
+		}
+	}
+	return false
 }
 
 func (al *Alvu) Build() {
@@ -873,9 +884,11 @@ func (w *Watcher) RebuildAlvu() {
 
 func (w *Watcher) RebuildFile(filePath string) {
 	for i, af := range w.alvu.files {
-		if af.sourcePath == filePath {
-			w.alvu.files[i].Build()
+		if af.sourcePath != filePath {
+			continue
 		}
+
+		w.alvu.files[i].Build()
 	}
 }
 
@@ -905,18 +918,19 @@ func (w *Watcher) StartWatching() {
 					})
 					fmt.Println(recompilingText.String())
 
-					fileInfo, err := os.Stat(event.Name)
-
+					_, err := os.Stat(event.Name)
 					// Do nothing if the file doesn't exit, just continue
 					if err != nil {
 						continue
 					}
 
-					// If directory then build alvu as a whole
-					if fileInfo.IsDir() {
-						w.RebuildAlvu()
-					} else {
+					// If alvu file then just build the file, else
+					// just rebuilt the whole folder since it could
+					// be a file from the public folder or the _layout file
+					if w.alvu.IsAlvuFile(event.Name) {
 						w.RebuildFile(event.Name)
+					} else {
+						w.RebuildAlvu()
 					}
 
 					_clientNotifyReload()

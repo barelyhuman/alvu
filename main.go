@@ -75,6 +75,52 @@ type LayoutRenderData struct {
 	Content template.HTML
 }
 
+// TODO: move stuff into the alvu struct type
+// on each newly added feature or during improving
+// older features.
+type Alvu struct {
+	publicPath string
+	files      []*AlvuFile
+}
+
+func (al *Alvu) AddFile(file *AlvuFile) {
+	al.files = append(al.files, file)
+}
+
+func (al *Alvu) Build() {
+	for ind := range al.files {
+		alvuFile := al.files[ind]
+		alvuFile.Build()
+	}
+
+	onDebug(func() {
+		debugInfo("Run all OnFinish Hooks")
+		memuse()
+	})
+
+	// right before completion run all hooks again but for the onFinish
+	hookCollection.RunAll("OnFinish")
+}
+
+func (al *Alvu) CopyPublic() {
+	onDebug(func() {
+		debugInfo("Before copying files")
+		memuse()
+	})
+	// copy public to out
+	_, err := os.Stat(al.publicPath)
+	if err == nil {
+		err = cp.Copy(al.publicPath, outPath)
+		if err != nil {
+			bail(err)
+		}
+	}
+	onDebug(func() {
+		debugInfo("After copying files")
+		memuse()
+	})
+}
+
 func main() {
 	onDebug(func() {
 		debugInfo("Before Exec")
@@ -107,7 +153,16 @@ func main() {
 	headTailDeprecationWarning := color.ColorString{}
 	headTailDeprecationWarning.Yellow(logPrefix).Yellow("[WARN] use of _tail.html and _head.html is deprecated, please use _layout.html instead")
 
-	watcher := NewWatcher()
+	alvuApp := &Alvu{
+		publicPath: publicPath,
+	}
+
+	watcher := NewWatcher(alvuApp)
+
+	if *serveFlag {
+		watcher.AddDir(pagesPath)
+		watcher.AddDir(publicPath)
+	}
 
 	onDebug(func() {
 		debugInfo("Opening _head")
@@ -146,22 +201,7 @@ func main() {
 		fmt.Println(headTailDeprecationWarning.String())
 	}
 
-	onDebug(func() {
-		debugInfo("Before copying files")
-		memuse()
-	})
-	// copy public to out
-	_, err = os.Stat(publicPath)
-	if err == nil {
-		err = cp.Copy(publicPath, outPath)
-		if err != nil {
-			bail(err)
-		}
-	}
-	onDebug(func() {
-		debugInfo("After copying files")
-		memuse()
-	})
+	alvuApp.CopyPublic()
 
 	onDebug(func() {
 		debugInfo("Reading hook and to process files")
@@ -180,12 +220,13 @@ func main() {
 		debugInfo("Running all OnStart hooks")
 		memuse()
 	})
+
 	hookCollection.RunAll("OnStart")
 
 	prefixSlashPath := regexp.MustCompile(`^\/`)
 
 	onDebug(func() {
-		debugInfo("Processing Files")
+		debugInfo("Creating Alvu Files")
 		memuse()
 	})
 	for _, toProcessItem := range toProcess {
@@ -196,6 +237,7 @@ func main() {
 		alvuFile := &AlvuFile{
 			lock:         &sync.Mutex{},
 			sourcePath:   toProcessItem,
+			hooks:        hookCollection,
 			destPath:     destFilePath,
 			name:         fileName,
 			headFile:     headFileFd,
@@ -205,40 +247,10 @@ func main() {
 			extras:       map[string]interface{}{},
 		}
 
-		if *serveFlag {
-			watcher.AddFile(alvuFile)
-		}
-
-		bail(alvuFile.ReadFile())
-		bail(alvuFile.ParseMeta())
-
-		// If no hooks are present just process the files
-		if len(hookCollection) == 0 {
-			alvuFile.ProcessFile(nil)
-		}
-
-		for _, hook := range hookCollection {
-
-			isForSpecificFile := hook.state.GetGlobal("ForFile")
-
-			if isForSpecificFile != lua.LNil {
-				if alvuFile.name == isForSpecificFile.String() {
-					alvuFile.ProcessFile(hook.state)
-				} else {
-					bail(alvuFile.ProcessFile(nil))
-				}
-			} else {
-				bail(alvuFile.ProcessFile(hook.state))
-			}
-		}
-		alvuFile.FlushFile()
+		alvuApp.AddFile(alvuFile)
 	}
-	onDebug(func() {
-		debugInfo("Run all OnFinish Hooks")
-		memuse()
-	})
-	// right before completion run all hooks again but for the onFinish
-	hookCollection.RunAll("OnFinish")
+
+	alvuApp.Build()
 
 	onDebug(func() {
 		runtime.GC()
@@ -394,6 +406,7 @@ func (hc HookCollection) RunAll(funcName string) {
 
 type AlvuFile struct {
 	lock             *sync.Mutex
+	hooks            HookCollection
 	name             string
 	sourcePath       string
 	destPath         string
@@ -408,23 +421,49 @@ type AlvuFile struct {
 	extras           map[string]interface{}
 }
 
-func (a *AlvuFile) ReadFile() error {
-	filecontent, err := os.ReadFile(a.sourcePath)
+func (alvuFile *AlvuFile) Build() {
+	bail(alvuFile.ReadFile())
+	bail(alvuFile.ParseMeta())
+
+	if len(alvuFile.hooks) == 0 {
+		alvuFile.ProcessFile(nil)
+	}
+
+	for _, hook := range hookCollection {
+
+		isForSpecificFile := hook.state.GetGlobal("ForFile")
+
+		if isForSpecificFile != lua.LNil {
+			if alvuFile.name == isForSpecificFile.String() {
+				alvuFile.ProcessFile(hook.state)
+			} else {
+				bail(alvuFile.ProcessFile(nil))
+			}
+		} else {
+			bail(alvuFile.ProcessFile(hook.state))
+		}
+	}
+
+	alvuFile.FlushFile()
+}
+
+func (af *AlvuFile) ReadFile() error {
+	filecontent, err := os.ReadFile(af.sourcePath)
 	if err != nil {
 		return fmt.Errorf("error reading file, error: %v", err)
 	}
-	a.content = filecontent
+	af.content = filecontent
 	return nil
 }
 
-func (a *AlvuFile) ParseMeta() error {
+func (af *AlvuFile) ParseMeta() error {
 	sep := []byte("---")
-	if !bytes.HasPrefix(a.content, sep) {
-		a.writeableContent = a.content
+	if !bytes.HasPrefix(af.content, sep) {
+		af.writeableContent = af.content
 		return nil
 	}
 
-	metaParts := bytes.SplitN(a.content, sep, 3)
+	metaParts := bytes.SplitN(af.content, sep, 3)
 
 	var meta map[string]interface{}
 	err := yaml.Unmarshal([]byte(metaParts[1]), &meta)
@@ -432,29 +471,29 @@ func (a *AlvuFile) ParseMeta() error {
 		return err
 	}
 
-	a.meta = meta
-	a.writeableContent = []byte(metaParts[2])
+	af.meta = meta
+	af.writeableContent = []byte(metaParts[2])
 
 	return nil
 }
 
-func (a *AlvuFile) ProcessFile(hook *lua.LState) error {
+func (af *AlvuFile) ProcessFile(hook *lua.LState) error {
 	// pre process hook => should return back json with `content` and `data`
-	a.lock.Lock()
-	defer a.lock.Unlock()
+	af.lock.Lock()
+	defer af.lock.Unlock()
 
-	a.targetName = regexp.MustCompile(`\.md$`).ReplaceAll([]byte(a.name), []byte(".html"))
+	af.targetName = regexp.MustCompile(`\.md$`).ReplaceAll([]byte(af.name), []byte(".html"))
 	onDebug(func() {
-		debugInfo(a.name + " will be changed to " + string(a.targetName))
+		debugInfo(af.name + " will be changed to " + string(af.targetName))
 	})
 
 	buf := bytes.NewBuffer([]byte(""))
 	mdToHTML := ""
 
-	if filepath.Ext(a.name) == ".md" {
-		newName := strings.Replace(a.name, filepath.Ext(a.name), ".html", 1)
-		a.targetName = []byte(newName)
-		mdProcessor.Convert(a.writeableContent, buf)
+	if filepath.Ext(af.name) == ".md" {
+		newName := strings.Replace(af.name, filepath.Ext(af.name), ".html", 1)
+		af.targetName = []byte(newName)
+		mdProcessor.Convert(af.writeableContent, buf)
 		mdToHTML = buf.String()
 	}
 
@@ -470,11 +509,11 @@ func (a *AlvuFile) ProcessFile(hook *lua.LState) error {
 		WriteableContent string                 `json:"content"`
 		HTMLContent      string                 `json:"html"`
 	}{
-		Name:             string(a.targetName),
-		SourcePath:       a.sourcePath,
-		DestPath:         a.destPath,
-		Meta:             a.meta,
-		WriteableContent: string(a.writeableContent),
+		Name:             string(af.targetName),
+		SourcePath:       af.sourcePath,
+		DestPath:         af.destPath,
+		Meta:             af.meta,
+		WriteableContent: string(af.writeableContent),
 		HTMLContent:      mdToHTML,
 	}
 
@@ -498,32 +537,32 @@ func (a *AlvuFile) ProcessFile(hook *lua.LState) error {
 
 	if fromPlug["content"] != nil {
 		stringVal := fmt.Sprintf("%s", fromPlug["content"])
-		a.writeableContent = []byte(stringVal)
+		af.writeableContent = []byte(stringVal)
 	}
 
 	if fromPlug["name"] != nil {
-		a.targetName = []byte(fmt.Sprintf("%v", fromPlug["name"]))
+		af.targetName = []byte(fmt.Sprintf("%v", fromPlug["name"]))
 	}
 
 	if fromPlug["data"] != nil {
-		a.data = mergeMapWithCheck(a.data, fromPlug["data"])
+		af.data = mergeMapWithCheck(af.data, fromPlug["data"])
 	}
 
 	if fromPlug["extras"] != nil {
-		a.extras = mergeMapWithCheck(a.extras, fromPlug["extras"])
+		af.extras = mergeMapWithCheck(af.extras, fromPlug["extras"])
 	}
 
 	hook.Pop(1)
 	return nil
 }
 
-func (a *AlvuFile) FlushFile() {
-	destFolder := filepath.Dir(a.destPath)
+func (af *AlvuFile) FlushFile() {
+	destFolder := filepath.Dir(af.destPath)
 	os.MkdirAll(destFolder, os.ModePerm)
 
-	targetFile := strings.Replace(path.Join(a.destPath), a.name, string(a.targetName), 1)
+	targetFile := strings.Replace(path.Join(af.destPath), af.name, string(af.targetName), 1)
 	onDebug(func() {
-		debugInfo("flushing for file: " + a.name + string(a.targetName))
+		debugInfo("flushing for file: " + af.name + string(af.targetName))
 		debugInfo("flusing file: " + targetFile)
 	})
 
@@ -533,20 +572,20 @@ func (a *AlvuFile) FlushFile() {
 
 	writeHeadTail := false
 
-	if a.baseTemplate == nil && (filepath.Ext(a.sourcePath) == ".md" || filepath.Ext(a.sourcePath) == "html") {
+	if af.baseTemplate == nil && (filepath.Ext(af.sourcePath) == ".md" || filepath.Ext(af.sourcePath) == "html") {
 		writeHeadTail = true
 	}
 
-	if writeHeadTail && a.headFile != nil {
-		shouldCopyContentsWithReset(a.headFile, f)
+	if writeHeadTail && af.headFile != nil {
+		shouldCopyContentsWithReset(af.headFile, f)
 	}
 
 	renderData := PageRenderData{
 		Meta: SiteMeta{
 			BaseURL: baseurl,
 		},
-		Data:   a.data,
-		Extras: a.extras,
+		Data:   af.data,
+		Extras: af.extras,
 	}
 
 	// Run the Markdown file through the conversion
@@ -555,7 +594,7 @@ func (a *AlvuFile) FlushFile() {
 	// raw HTML
 	var preConvertHTML bytes.Buffer
 	preConvertTmpl := textTmpl.New("temporary_pre_template")
-	preConvertTmpl.Parse(string(a.writeableContent))
+	preConvertTmpl.Parse(string(af.writeableContent))
 	err = preConvertTmpl.Execute(&preConvertHTML, renderData)
 	bail(err)
 
@@ -571,9 +610,9 @@ func (a *AlvuFile) FlushFile() {
 	// If a layout file was found
 	// write the converted html content into the
 	// layout template file
-	if a.baseTemplate != nil {
+	if af.baseTemplate != nil {
 		layout := template.New("layout")
-		layoutTemplateData := string(readFileToBytes(a.baseTemplate))
+		layoutTemplateData := string(readFileToBytes(af.baseTemplate))
 		layoutTemplateData = _injectLiveReload(&layoutTemplateData)
 		toHtml.Reset()
 		layout.Parse(layoutTemplateData)
@@ -584,18 +623,18 @@ func (a *AlvuFile) FlushFile() {
 		f, &toHtml,
 	)
 
-	if writeHeadTail && a.tailFile != nil && a.baseTemplate == nil {
-		shouldCopyContentsWithReset(a.tailFile, f)
+	if writeHeadTail && af.tailFile != nil && af.baseTemplate == nil {
+		shouldCopyContentsWithReset(af.tailFile, f)
 	}
 
 	data, err := os.ReadFile(targetFile)
 	bail(err)
 
 	onDebug(func() {
-		debugInfo("template path: %v", a.sourcePath)
+		debugInfo("template path: %v", af.sourcePath)
 	})
 
-	t := template.New(path.Join(a.sourcePath))
+	t := template.New(path.Join(af.sourcePath))
 	t.Parse(string(data))
 
 	f.Seek(0, 0)
@@ -806,54 +845,38 @@ func Contains(collection []string, item string) bool {
 // to be able to run alvu compile processes again
 // FIXME: redundant compile process for the files
 type Watcher struct {
+	alvu   *Alvu
 	notify *fsnotify.Watcher
-	files  []*AlvuFile
+	dirs   []string
 }
 
-func NewWatcher() *Watcher {
-	watcher := &Watcher{}
+func NewWatcher(alvu *Alvu) *Watcher {
+	watcher := &Watcher{
+		alvu: alvu,
+	}
 	notifier, err := fsnotify.NewWatcher()
 	bail(err)
 	watcher.notify = notifier
 	return watcher
 }
 
-func (w *Watcher) AddFile(file *AlvuFile) {
-	w.files = append(w.files, file)
-	err := w.notify.Add(file.sourcePath)
+func (w *Watcher) AddDir(dirPath string) {
+	w.dirs = append(w.dirs, dirPath)
+	err := w.notify.Add(dirPath)
 	bail(err)
 }
 
-func (w *Watcher) Compile() {
-	for ind := range w.files {
-		alvuFile := w.files[ind]
-		bail(alvuFile.ReadFile())
-		bail(alvuFile.ParseMeta())
+func (w *Watcher) RebuildAlvu() {
+	w.alvu.CopyPublic()
+	w.alvu.Build()
+}
 
-		// If no hooks are present just process the files
-		if len(hookCollection) == 0 {
-			alvuFile.ProcessFile(nil)
+func (w *Watcher) RebuildFile(filePath string) {
+	for i, af := range w.alvu.files {
+		if af.sourcePath == filePath {
+			w.alvu.files[i].Build()
 		}
-
-		for _, hook := range hookCollection {
-
-			isForSpecificFile := hook.state.GetGlobal("ForFile")
-
-			if isForSpecificFile != lua.LNil {
-				if alvuFile.name == isForSpecificFile.String() {
-					alvuFile.ProcessFile(hook.state)
-				} else {
-					bail(alvuFile.ProcessFile(nil))
-				}
-			} else {
-				bail(alvuFile.ProcessFile(hook.state))
-			}
-		}
-
-		alvuFile.FlushFile()
 	}
-
-	hookCollection.RunAll("OnFinish")
 }
 
 func (w *Watcher) StartWatching() {
@@ -881,7 +904,21 @@ func (w *Watcher) StartWatching() {
 						debugInfo("File Changed")
 					})
 					fmt.Println(recompilingText.String())
-					w.Compile()
+
+					fileInfo, err := os.Stat(event.Name)
+
+					// Do nothing if the file doesn't exit, just continue
+					if err != nil {
+						continue
+					}
+
+					// If directory then build alvu as a whole
+					if fileInfo.IsDir() {
+						w.RebuildAlvu()
+					} else {
+						w.RebuildFile(event.Name)
+					}
+
 					_clientNotifyReload()
 					fmt.Println(recompiledText.String())
 				}

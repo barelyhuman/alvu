@@ -56,6 +56,7 @@ var outPath string
 var hardWraps bool
 var hookCollection HookCollection
 var reloadCh = []chan bool{}
+var serveFlag *bool
 
 var reservedFiles []string = []string{"_head.html", "_tail.html", "_layout.html"}
 
@@ -86,7 +87,7 @@ func main() {
 	hooksPathFlag := flag.String("hooks", "./hooks", "`DIR` that contains hooks for the content")
 	enableHighlightingFlag := flag.Bool("highlight", false, "enable highlighting for markdown files")
 	highlightThemeFlag := flag.String("highlight-theme", "bw", "`THEME` to use for highlighting (supports most themes from pygments)")
-	serveFlag := flag.Bool("serve", false, "start a local server")
+	serveFlag = flag.Bool("serve", false, "start a local server")
 	hardWrapsFlag := flag.Bool("hard-wrap", true, "enable hard wrapping of elements with `<br>`")
 	portFlag := flag.String("port", "3000", "`PORT` to start the server on")
 
@@ -105,6 +106,8 @@ func main() {
 
 	headTailDeprecationWarning := color.ColorString{}
 	headTailDeprecationWarning.Yellow(logPrefix).Yellow("[WARN] use of _tail.html and _head.html is deprecated, please use _layout.html instead")
+
+	watcher := NewWatcher()
 
 	onDebug(func() {
 		debugInfo("Opening _head")
@@ -180,8 +183,6 @@ func main() {
 	hookCollection.RunAll("OnStart")
 
 	prefixSlashPath := regexp.MustCompile(`^\/`)
-
-	watcher := NewWatcher()
 
 	onDebug(func() {
 		debugInfo("Processing Files")
@@ -571,6 +572,7 @@ func (a *AlvuFile) FlushFile() {
 	if a.baseTemplate != nil {
 		layout := template.New("layout")
 		layoutTemplateData := string(readFileToBytes(a.baseTemplate))
+		layoutTemplateData = _injectLiveReload(&layoutTemplateData)
 		toHtml.Reset()
 		layout.Parse(layoutTemplateData)
 		layout.Execute(&toHtml, layoutData)
@@ -889,4 +891,26 @@ func (w *Watcher) StartWatching() {
 			}
 		}
 	}()
+}
+
+func _injectLiveReload(layoutHTML *string) string {
+	if !*serveFlag {
+		return *layoutHTML
+	}
+	return *layoutHTML + `<script>
+				  const socket = new WebSocket("ws://localhost:3000/ws");
+			
+				  // Connection opened
+				  socket.addEventListener("open", (event) => {
+					socket.send("Hello Server!");
+				  });
+			
+				  // Listen for messages
+				  socket.addEventListener("message", (event) => {
+					if (event.data == "reload") {
+					  socket.close();
+					  window.location.reload();
+					}
+				  });
+			</script>`
 }

@@ -796,7 +796,8 @@ func _webSocketHandler(ws *websocket.Conn) {
 	for range reloadCh[currIndex] {
 		err := websocket.Message.Send(ws, "reload")
 		if err != nil {
-			log.Printf("Error sending message: %s", err.Error())
+			// For debug only
+			// log.Printf("Error sending message: %s", err.Error())
 			break
 		}
 		onDebug(func() {

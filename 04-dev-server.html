@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>alvu | documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/alvu/styles.css" />
+  </head>
+
+  <body>
+    <header class="container">
+<nav>
+<p><a href=/alvu/index>..</a></p>
+<p><a href=/alvu/00-readme> readme</a></p>
+<p><a href=/alvu/01-basics> basics</a></p>
+<p><a href=/alvu/02-scripting> scripting</a></p>
+<p><a href=/alvu/03-writers> writers</a></p>
+<p><a href=/alvu/04-dev-server> dev server</a></p>
+<p><a href=/alvu/05-CLI> cli</a></p>
+<p><a href=/alvu/06-recipes> recipes</a></p>
+</nav>
+</header>
+<main class="container">
+<h1 id="development-server">Development Server</h1>
+<p>The tool comes with it's own dev server (since v0.2.4), and can be used to run a
+simple file server for the output folder.</p>
+<p>It's as simple as running the following command</p>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span>$ alvu --serve
+</span></span><span style="display:flex;"><span><span style="font-style:italic"># short for</span>
+</span></span><span style="display:flex;"><span>$ alvu --serve --port=3000
+</span></span></code></pre><h2 id="live-reload">Live Reload</h2>
+<p><small>Added in <code>v0.2.9</code></small></p>
+<p>There's no changes that you need to do, just upgrade your installation to
+<code>v0.2.9</code></p>
+<h4 id="whats-to-be-expected">What's to be expected</h4>
+<ul>
+<li>
+<p>Will reload on changes from the directories <code>pages</code>, <code>public</code> , or if you
+changed them with flags then the respective paths will be watched instead</p>
+</li>
+<li>
+<p>The rebuilding process is atomic and will recompile a singular file if that's
+all that's changed instead of compiling the whole folder. This is only true
+for files in the <code>pages</code> directory, if any changes were made in <code>public</code>
+directory then the whole alvu setup will rebuild itself again.</p>
+</li>
+</ul>
+<h4 id="caveats">Caveats</h4>
+<ul>
+<li><code>./hooks</code> are not watched, this is because hooks have their own state and
+involve a VM, the current structure of alvu stops us from doing this but
+should be done soon without increasing complexity or size of alvu itself.</li>
+</ul>
+</main>
+    <footer class="container">
+      Built with <a href="http://github.com/barelyhuman/alvu">alvu</a>
+    </footer>
+  </body>
+</html>

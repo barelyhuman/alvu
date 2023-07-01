@@ -16,7 +16,7 @@ docs: build
 	./alvu --path="docs" --baseurl="/alvu/" --highlight --hard-wrap=false
 
 docs_dev: build
-	ls docs/**/* | entr -cr ./alvu --highlight --hard-wrap=false --serve --path='./docs'
+	./alvu --highlight --hard-wrap=false --serve --path='./docs'
 
 pages: docs
 	rm -rf alvu

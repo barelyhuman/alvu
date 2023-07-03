@@ -86,7 +86,7 @@ type Alvu struct {
 
 func (al *Alvu) AddFile(file *AlvuFile) {
 	al.files = append(al.files, file)
-	al.filesIndex = append(al.filesIndex, file.name)
+	al.filesIndex = append(al.filesIndex, file.sourcePath)
 }
 
 func (al *Alvu) IsAlvuFile(filePath string) bool {
@@ -259,6 +259,11 @@ func main() {
 		}
 
 		alvuApp.AddFile(alvuFile)
+
+		// If serving, also add the nested path into it
+		if *serveFlag {
+			watcher.AddDir(path.Dir(alvuFile.sourcePath))
+		}
 	}
 
 	alvuApp.Build()
@@ -873,6 +878,13 @@ func NewWatcher(alvu *Alvu) *Watcher {
 }
 
 func (w *Watcher) AddDir(dirPath string) {
+
+	for _, pth := range w.dirs {
+		if pth == dirPath {
+			return
+		}
+	}
+
 	w.dirs = append(w.dirs, dirPath)
 	err := w.notify.Add(dirPath)
 	bail(err)

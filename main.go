@@ -278,7 +278,7 @@ func main() {
 	fmt.Println(cs.Blue(logPrefix).Green("Compiled ").Cyan("\"" + basePath + "\"").Green(" to ").Cyan("\"" + outPath + "\"").String())
 
 	if *serveFlag {
-		watcher.StartWatching()
+		go watcher.StartWatching()
 		runServer(*portFlag)
 	}
 
@@ -907,12 +907,6 @@ func (w *Watcher) RebuildFile(filePath string) {
 
 func (w *Watcher) StartWatching() {
 
-	recompilingText := &color.ColorString{}
-	recompilingText.Blue(logPrefix).Gray("Recompiling...").Reset(" ")
-
-	recompiledText := &color.ColorString{}
-	recompiledText.Blue(logPrefix).Green("Recompiled!").Reset(" ")
-
 	go func() {
 		for {
 			select {
@@ -929,7 +923,9 @@ func (w *Watcher) StartWatching() {
 					onDebug(func() {
 						debugInfo("File Changed")
 					})
-					fmt.Println(recompilingText.String())
+
+					recompiledText := &color.ColorString{}
+					recompiledText.Blue(logPrefix).Green("Recompiled!").Reset(" ")
 
 					_, err := os.Stat(event.Name)
 					// Do nothing if the file doesn't exit, just continue
@@ -941,13 +937,20 @@ func (w *Watcher) StartWatching() {
 					// just rebuilt the whole folder since it could
 					// be a file from the public folder or the _layout file
 					if w.alvu.IsAlvuFile(event.Name) {
+						recompilingText := &color.ColorString{}
+						recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray(event.Name).Reset(" ")
+						fmt.Println(recompilingText.String())
 						w.RebuildFile(event.Name)
 					} else {
+						recompilingText := &color.ColorString{}
+						recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray("All").Reset(" ")
+						fmt.Println(recompilingText.String())
 						w.RebuildAlvu()
 					}
 
 					_clientNotifyReload()
 					fmt.Println(recompiledText.String())
+					continue
 				}
 			case err, ok := <-w.notify.Errors:
 				if !ok {

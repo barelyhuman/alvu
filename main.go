@@ -278,7 +278,7 @@ func main() {
 	fmt.Println(cs.Blue(logPrefix).Green("Compiled ").Cyan("\"" + basePath + "\"").Green(" to ").Cyan("\"" + outPath + "\"").String())
 
 	if *serveFlag {
-		go watcher.StartWatching()
+		watcher.StartWatching()
 		runServer(*portFlag)
 	}
 
@@ -835,6 +835,7 @@ func _clientNotifyReload() {
 	for ind := range reloadCh {
 		reloadCh[ind] <- true
 	}
+	reloadCh = []chan bool{}
 }
 
 func normalizeFilePath(path string) string {
@@ -891,18 +892,31 @@ func (w *Watcher) AddDir(dirPath string) {
 }
 
 func (w *Watcher) RebuildAlvu() {
+	onDebug(func() {
+		debugInfo("Rebuild Started")
+	})
 	w.alvu.CopyPublic()
 	w.alvu.Build()
+	onDebug(func() {
+		debugInfo("Build Completed")
+	})
 }
 
 func (w *Watcher) RebuildFile(filePath string) {
+	onDebug(func() {
+		debugInfo("RebuildFile Started")
+	})
 	for i, af := range w.alvu.files {
 		if af.sourcePath != filePath {
 			continue
 		}
 
 		w.alvu.files[i].Build()
+		break
 	}
+	onDebug(func() {
+		debugInfo("RebuildFile Completed")
+	})
 }
 
 func (w *Watcher) StartWatching() {

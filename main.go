@@ -23,7 +23,6 @@ import (
 
 	"github.com/barelyhuman/go/env"
 	ghttp "github.com/cjoudrey/gluahttp"
-	"github.com/fsnotify/fsnotify"
 
 	"github.com/barelyhuman/go/color"
 	cp "github.com/otiai10/copy"
@@ -147,6 +146,7 @@ func main() {
 	serveFlag = flag.Bool("serve", false, "start a local server")
 	hardWrapsFlag := flag.Bool("hard-wrap", true, "enable hard wrapping of elements with `<br>`")
 	portFlag := flag.String("port", "3000", "`PORT` to start the server on")
+	pollDurationFlag := flag.Int("poll", 2, "Polling duration for file changes in Seconds")
 
 	flag.Parse()
 
@@ -169,6 +169,7 @@ func main() {
 	}
 
 	watcher := NewWatcher(alvuApp)
+	watcher.poller.intervalInSeconds = *pollDurationFlag
 
 	if *serveFlag {
 		watcher.AddDir(pagesPath)
@@ -864,17 +865,15 @@ func Contains(collection []string, item string) bool {
 // FIXME: redundant compile process for the files
 type Watcher struct {
 	alvu   *Alvu
-	notify *fsnotify.Watcher
+	poller *Poller
 	dirs   []string
 }
 
 func NewWatcher(alvu *Alvu) *Watcher {
 	watcher := &Watcher{
-		alvu: alvu,
+		alvu:   alvu,
+		poller: NewPollWatcher(),
 	}
-	notifier, err := fsnotify.NewWatcher()
-	bail(err)
-	watcher.notify = notifier
 	return watcher
 }
 
@@ -887,8 +886,7 @@ func (w *Watcher) AddDir(dirPath string) {
 	}
 
 	w.dirs = append(w.dirs, dirPath)
-	err := w.notify.Add(dirPath)
-	bail(err)
+	w.poller.Add(dirPath)
 }
 
 func (w *Watcher) RebuildAlvu() {
@@ -920,58 +918,40 @@ func (w *Watcher) RebuildFile(filePath string) {
 }
 
 func (w *Watcher) StartWatching() {
-
+	go w.poller.StartPoller()
 	go func() {
-		for {
-			select {
-			case event, ok := <-w.notify.Events:
-				if !ok {
-					return
-				}
+		for evt := range w.poller.Events {
+			onDebug(func() {
+				debugInfo("Events registered")
+			})
 
-				onDebug(func() {
-					debugInfo("Events registered")
-				})
+			recompiledText := &color.ColorString{}
+			recompiledText.Blue(logPrefix).Green("Recompiled!").Reset(" ")
 
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					onDebug(func() {
-						debugInfo("File Changed")
-					})
-
-					recompiledText := &color.ColorString{}
-					recompiledText.Blue(logPrefix).Green("Recompiled!").Reset(" ")
-
-					_, err := os.Stat(event.Name)
-					// Do nothing if the file doesn't exit, just continue
-					if err != nil {
-						continue
-					}
-
-					// If alvu file then just build the file, else
-					// just rebuilt the whole folder since it could
-					// be a file from the public folder or the _layout file
-					if w.alvu.IsAlvuFile(event.Name) {
-						recompilingText := &color.ColorString{}
-						recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray(event.Name).Reset(" ")
-						fmt.Println(recompilingText.String())
-						w.RebuildFile(event.Name)
-					} else {
-						recompilingText := &color.ColorString{}
-						recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray("All").Reset(" ")
-						fmt.Println(recompilingText.String())
-						w.RebuildAlvu()
-					}
-
-					_clientNotifyReload()
-					fmt.Println(recompiledText.String())
-					continue
-				}
-			case err, ok := <-w.notify.Errors:
-				if !ok {
-					return
-				}
-				fmt.Println("Error happened 😢", err)
+			_, err := os.Stat(evt.path)
+			// Do nothing if the file doesn't exit, just continue
+			if err != nil {
+				continue
 			}
+
+			// If alvu file then just build the file, else
+			// just rebuilt the whole folder since it could
+			// be a file from the public folder or the _layout file
+			if w.alvu.IsAlvuFile(evt.path) {
+				recompilingText := &color.ColorString{}
+				recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray(evt.path).Reset(" ")
+				fmt.Println(recompilingText.String())
+				w.RebuildFile(evt.path)
+			} else {
+				recompilingText := &color.ColorString{}
+				recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray("All").Reset(" ")
+				fmt.Println(recompilingText.String())
+				w.RebuildAlvu()
+			}
+
+			_clientNotifyReload()
+			fmt.Println(recompiledText.String())
+			continue
 		}
 	}()
 }

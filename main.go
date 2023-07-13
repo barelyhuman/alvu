@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/barelyhuman/go/env"
+	"github.com/barelyhuman/go/poller"
 	ghttp "github.com/cjoudrey/gluahttp"
 
 	"github.com/barelyhuman/go/color"
@@ -146,7 +147,7 @@ func main() {
 	serveFlag = flag.Bool("serve", false, "start a local server")
 	hardWrapsFlag := flag.Bool("hard-wrap", true, "enable hard wrapping of elements with `<br>`")
 	portFlag := flag.String("port", "3000", "`PORT` to start the server on")
-	pollDurationFlag := flag.Int("poll", 2, "Polling duration for file changes in Seconds")
+	pollDurationFlag := flag.Int("poll", 350, "Polling duration for file changes in milliseconds")
 
 	flag.Parse()
 
@@ -168,8 +169,7 @@ func main() {
 		publicPath: publicPath,
 	}
 
-	watcher := NewWatcher(alvuApp)
-	watcher.poller.intervalInSeconds = *pollDurationFlag
+	watcher := NewWatcher(alvuApp, *pollDurationFlag)
 
 	if *serveFlag {
 		watcher.AddDir(pagesPath)
@@ -865,15 +865,16 @@ func Contains(collection []string, item string) bool {
 // FIXME: redundant compile process for the files
 type Watcher struct {
 	alvu   *Alvu
-	poller *Poller
+	poller *poller.Poller
 	dirs   []string
 }
 
-func NewWatcher(alvu *Alvu) *Watcher {
+func NewWatcher(alvu *Alvu, interval int) *Watcher {
 	watcher := &Watcher{
 		alvu:   alvu,
-		poller: NewPollWatcher(),
+		poller: poller.NewPollWatcher(interval),
 	}
+
 	return watcher
 }
 
@@ -920,38 +921,48 @@ func (w *Watcher) RebuildFile(filePath string) {
 func (w *Watcher) StartWatching() {
 	go w.poller.StartPoller()
 	go func() {
-		for evt := range w.poller.Events {
-			onDebug(func() {
-				debugInfo("Events registered")
-			})
+		for {
+			select {
+			case evt := <-w.poller.Events:
+				onDebug(func() {
+					debugInfo("Events registered")
+				})
 
-			recompiledText := &color.ColorString{}
-			recompiledText.Blue(logPrefix).Green("Recompiled!").Reset(" ")
+				recompiledText := &color.ColorString{}
+				recompiledText.Blue(logPrefix).Green("Recompiled!").Reset(" ")
 
-			_, err := os.Stat(evt.path)
-			// Do nothing if the file doesn't exit, just continue
-			if err != nil {
+				_, err := os.Stat(evt.Path)
+
+				// Do nothing if the file doesn't exit, just continue
+				if err != nil {
+					continue
+				}
+
+				// If alvu file then just build the file, else
+				// just rebuilt the whole folder since it could
+				// be a file from the public folder or the _layout file
+				if w.alvu.IsAlvuFile(evt.Path) {
+					recompilingText := &color.ColorString{}
+					recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray(evt.Path).Reset(" ")
+					fmt.Println(recompilingText.String())
+					w.RebuildFile(evt.Path)
+				} else {
+					recompilingText := &color.ColorString{}
+					recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray("All").Reset(" ")
+					fmt.Println(recompilingText.String())
+					w.RebuildAlvu()
+				}
+
+				_clientNotifyReload()
+				fmt.Println(recompiledText.String())
 				continue
-			}
 
-			// If alvu file then just build the file, else
-			// just rebuilt the whole folder since it could
-			// be a file from the public folder or the _layout file
-			if w.alvu.IsAlvuFile(evt.path) {
-				recompilingText := &color.ColorString{}
-				recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray(evt.path).Reset(" ")
-				fmt.Println(recompilingText.String())
-				w.RebuildFile(evt.path)
-			} else {
-				recompilingText := &color.ColorString{}
-				recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray("All").Reset(" ")
-				fmt.Println(recompilingText.String())
-				w.RebuildAlvu()
+			case err := <-w.poller.Errors:
+				// If the poller has an error, just crash,
+				// digesting polling issues without killing the program would make it complicated
+				// to handle cleanup of all the kind of files that are being maintained by alvu
+				bail(err)
 			}
-
-			_clientNotifyReload()
-			fmt.Println(recompiledText.String())
-			continue
 		}
 	}()
 }
@@ -962,12 +973,12 @@ func _injectLiveReload(layoutHTML *string) string {
 	}
 	return *layoutHTML + `<script>
 				  const socket = new WebSocket("ws://localhost:3000/ws");
-			
+
 				  // Connection opened
 				  socket.addEventListener("open", (event) => {
 					socket.send("Hello Server!");
 				  });
-			
+
 				  // Listen for messages
 				  socket.addEventListener("message", (event) => {
 					if (event.data == "reload") {

@@ -1,3 +1,6 @@
+## v0.2.13
+ee5f992a504fa929e4d780ac0073d8b26db6127f Merge pull request #3 from barelyhuman/feat/fs-poller
+
 ## v0.2.12
 3a4ab4b1384ad0f90945cddc59e97cfe49762917 fix: socket reset
 

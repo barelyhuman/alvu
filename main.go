@@ -22,8 +22,8 @@ import (
 	"sync"
 
 	"github.com/barelyhuman/go/env"
+	"github.com/barelyhuman/go/poller"
 	ghttp "github.com/cjoudrey/gluahttp"
-	"github.com/fsnotify/fsnotify"
 
 	"github.com/barelyhuman/go/color"
 	cp "github.com/otiai10/copy"
@@ -147,6 +147,7 @@ func main() {
 	serveFlag = flag.Bool("serve", false, "start a local server")
 	hardWrapsFlag := flag.Bool("hard-wrap", true, "enable hard wrapping of elements with `<br>`")
 	portFlag := flag.String("port", "3000", "`PORT` to start the server on")
+	pollDurationFlag := flag.Int("poll", 350, "Polling duration for file changes in milliseconds")
 
 	flag.Parse()
 
@@ -168,7 +169,7 @@ func main() {
 		publicPath: publicPath,
 	}
 
-	watcher := NewWatcher(alvuApp)
+	watcher := NewWatcher(alvuApp, *pollDurationFlag)
 
 	if *serveFlag {
 		watcher.AddDir(pagesPath)
@@ -864,17 +865,16 @@ func Contains(collection []string, item string) bool {
 // FIXME: redundant compile process for the files
 type Watcher struct {
 	alvu   *Alvu
-	notify *fsnotify.Watcher
+	poller *poller.Poller
 	dirs   []string
 }
 
-func NewWatcher(alvu *Alvu) *Watcher {
+func NewWatcher(alvu *Alvu, interval int) *Watcher {
 	watcher := &Watcher{
-		alvu: alvu,
+		alvu:   alvu,
+		poller: poller.NewPollWatcher(interval),
 	}
-	notifier, err := fsnotify.NewWatcher()
-	bail(err)
-	watcher.notify = notifier
+
 	return watcher
 }
 
@@ -887,8 +887,7 @@ func (w *Watcher) AddDir(dirPath string) {
 	}
 
 	w.dirs = append(w.dirs, dirPath)
-	err := w.notify.Add(dirPath)
-	bail(err)
+	w.poller.Add(dirPath)
 }
 
 func (w *Watcher) RebuildAlvu() {
@@ -920,57 +919,49 @@ func (w *Watcher) RebuildFile(filePath string) {
 }
 
 func (w *Watcher) StartWatching() {
-
+	go w.poller.StartPoller()
 	go func() {
 		for {
 			select {
-			case event, ok := <-w.notify.Events:
-				if !ok {
-					return
-				}
-
+			case evt := <-w.poller.Events:
 				onDebug(func() {
 					debugInfo("Events registered")
 				})
 
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					onDebug(func() {
-						debugInfo("File Changed")
-					})
+				recompiledText := &color.ColorString{}
+				recompiledText.Blue(logPrefix).Green("Recompiled!").Reset(" ")
 
-					recompiledText := &color.ColorString{}
-					recompiledText.Blue(logPrefix).Green("Recompiled!").Reset(" ")
+				_, err := os.Stat(evt.Path)
 
-					_, err := os.Stat(event.Name)
-					// Do nothing if the file doesn't exit, just continue
-					if err != nil {
-						continue
-					}
-
-					// If alvu file then just build the file, else
-					// just rebuilt the whole folder since it could
-					// be a file from the public folder or the _layout file
-					if w.alvu.IsAlvuFile(event.Name) {
-						recompilingText := &color.ColorString{}
-						recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray(event.Name).Reset(" ")
-						fmt.Println(recompilingText.String())
-						w.RebuildFile(event.Name)
-					} else {
-						recompilingText := &color.ColorString{}
-						recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray("All").Reset(" ")
-						fmt.Println(recompilingText.String())
-						w.RebuildAlvu()
-					}
-
-					_clientNotifyReload()
-					fmt.Println(recompiledText.String())
+				// Do nothing if the file doesn't exit, just continue
+				if err != nil {
 					continue
 				}
-			case err, ok := <-w.notify.Errors:
-				if !ok {
-					return
+
+				// If alvu file then just build the file, else
+				// just rebuilt the whole folder since it could
+				// be a file from the public folder or the _layout file
+				if w.alvu.IsAlvuFile(evt.Path) {
+					recompilingText := &color.ColorString{}
+					recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray(evt.Path).Reset(" ")
+					fmt.Println(recompilingText.String())
+					w.RebuildFile(evt.Path)
+				} else {
+					recompilingText := &color.ColorString{}
+					recompilingText.Blue(logPrefix).Cyan("Recompiling: ").Gray("All").Reset(" ")
+					fmt.Println(recompilingText.String())
+					w.RebuildAlvu()
 				}
-				fmt.Println("Error happened 😢", err)
+
+				_clientNotifyReload()
+				fmt.Println(recompiledText.String())
+				continue
+
+			case err := <-w.poller.Errors:
+				// If the poller has an error, just crash,
+				// digesting polling issues without killing the program would make it complicated
+				// to handle cleanup of all the kind of files that are being maintained by alvu
+				bail(err)
 			}
 		}
 	}()
@@ -982,12 +973,12 @@ func _injectLiveReload(layoutHTML *string) string {
 	}
 	return *layoutHTML + `<script>
 				  const socket = new WebSocket("ws://localhost:3000/ws");
-			
+
 				  // Connection opened
 				  socket.addEventListener("open", (event) => {
 					socket.send("Hello Server!");
 				  });
-			
+
 				  // Listen for messages
 				  socket.addEventListener("message", (event) => {
 					if (event.data == "reload") {

@@ -4,11 +4,13 @@ import (
 	"os"
 	"path"
 
+	dotenv "github.com/joho/godotenv"
 	lua "github.com/yuin/gopher-lua"
 )
 
 var api = map[string]lua.LGFunction{
-	"files": GetFilesIndex,
+	"files":   GetFilesIndex,
+	"get_env": GetEnv,
 }
 
 // Preload adds json to the given Lua state's package.preload table. After it
@@ -80,4 +82,20 @@ func getFilesIndex(pathToIndex string) (paths []string, err error) {
 	}
 
 	return
+}
+
+func GetEnv(L *lua.LState) int {
+	// path to get the env from
+	str := L.CheckString(1)
+	// key to get from index
+	key := L.CheckString(2)
+	value := LGetEnv(L, str, key)
+	L.Push(value)
+	return 1
+}
+
+func LGetEnv(L *lua.LState, fromFile string, str string) lua.LString {
+	dotenv.Load(fromFile)
+	val := os.Getenv(str)
+	return lua.LString(val)
 }

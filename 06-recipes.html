@@ -20,8 +20,7 @@
 <p><a href=/alvu/index>..</a></p>
 <p><a href=/alvu/00-readme> readme</a></p>
 <p><a href=/alvu/01-basics> basics</a></p>
-<p><a href=/alvu/02-scripting> scripting</a></p>
-<p><a href=/alvu/03-writers> writers</a></p>
+<p><a href=/alvu/03-concepts> concepts</a></p>
 <p><a href=/alvu/04-dev-server> dev server</a></p>
 <p><a href=/alvu/05-CLI> cli</a></p>
 <p><a href=/alvu/06-recipes> recipes</a></p>
@@ -29,12 +28,24 @@
 </header>
 <main class="container">
 <h1 id="recipes">Recipes</h1>
-<p><a href="#templates">Jump to Templates</a></p>
+<h3 id="toc">TOC</h3>
+<ul>
+<li><a href="#watching-for-changes">Watching for Changes</a></li>
+<li><a href="#importing-other-lua-files">Importing Other lua files</a></li>
+<li><a href="#string-interpolation">String Interpolation</a></li>
+<li><a href="#string-functions">String Functions</a></li>
+<li><a href="#get-files-from-a-directory">Get Files from a Dir</a></li>
+<li><a href="#reading--writing-files">Reading Writing Files</a></li>
+<li><a href="#templates">Templates</a></li>
+</ul>
 <p>Methods and ways to be able to do basic tasks while working with alvu</p>
 <h2 id="watching-for-changes">Watching for changes</h2>
 <p>I use <a href="https://github.com/eradman/entr">entr</a> as a file notifier which can run arbitrary commands on file changes, which can be done like so to have alvu monitor for files</p>
 <pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span>ls docs/**/* | entr -cr alvu --path=<span style="font-style:italic">&#39;./docs&#39;</span>
-</span></span></code></pre><p>This will list all files in the <code>docs</code> folder (root of an alvu project) and then run the alvu command while specifying the base path to be <code>./docs</code></p>
+</span></span></code></pre><blockquote>
+<p><strong>Note</strong>: since v0.2.9, alvu comes with it's own file watcher and live-reload but is limited to the <code>public</code> and <code>pages</code> directory and it is still recommended to use <code>entr</code> if you wish to handle watching custom paths</p>
+</blockquote>
+<p>This will list all files in the <code>docs</code> folder (root of an alvu project) and then run the alvu command while specifying the base path to be <code>./docs</code></p>
 <h2 id="importing-other-lua-files">Importing other lua files</h2>
 <p>You'll need to work with lua files that are in a sibling directory
 in the project and you can do so by adding them to the scripts
@@ -51,7 +62,7 @@ in the project and you can do so by adding them to the scripts
 </span></span><span style="display:flex;"><span><span style="font-weight:bold">end</span>
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span><span style="font-style:italic">-- usage</span>
-</span></span><span style="display:flex;"><span>interpolate(<span style="font-style:italic">&#34;this is a ${message} string&#34;</span>, { message = <span style="font-style:italic">&#34;interpolated&#34;</span> })
+</span></span><span style="display:flex;"><span>interpolate(<span style="font-style:italic">&#34;this is an ${message} string&#34;</span>, { message = <span style="font-style:italic">&#34;interpolated&#34;</span> })
 </span></span></code></pre><h2 id="string-functions">String Functions</h2>
 <p>A helper library is injected into all alvu hook files which can be required into the script to help with basic string manipulation and querying</p>
 <pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-weight:bold">local</span> strings = require(<span style="font-style:italic">&#34;strings&#34;</span>)
@@ -62,6 +73,16 @@ in the project and you can do so by adding them to the scripts
 </span></span></code></pre><p>You can read more about these from the <a href="https://github.com/vadv/gopher-lua-libs/tree/master/strings">gopher-lua-libs</a> repo.</p>
 <h2 id="get-files-from-a-directory">Get files from a directory</h2>
 <p>If working with blogs and nested data you might wanna get files in a directory and you can use the following function</p>
+<p>There's 2 methods, you can either use the <code>alvu</code> helper library or you can add the <code>scandir</code> function shown below to
+your <code>libs</code> folder if you wish to maintain control over the file reading functionality</p>
+<ul>
+<li>Using <code>alvu</code> helpers</li>
+</ul>
+<pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-weight:bold">local</span> alvu = require(<span style="font-style:italic">&#34;alvu&#34;</span>)
+</span></span><span style="display:flex;"><span><span style="font-weight:bold">local</span> all_files = alvu.files(path)
+</span></span></code></pre><ul>
+<li>Custom function</li>
+</ul>
 <pre tabindex="0" style="background-color:#fff;"><code><span style="display:flex;"><span><span style="font-weight:bold">function</span> scandir(directory)
 </span></span><span style="display:flex;"><span>    <span style="font-weight:bold">local</span> i, t, popen = 0, {}, io.popen
 </span></span><span style="display:flex;"><span>

@@ -13,4 +13,9 @@ function Lib.totitlecase(name)
         end)
 end
 
+function Lib.starts_with(str,start)
+    return string.sub(str,1,string.len(start))==start
+end
+
+
 return Lib

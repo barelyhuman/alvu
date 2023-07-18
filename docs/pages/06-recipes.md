@@ -1,6 +1,14 @@
 # Recipes
 
-[Jump to Templates](#templates)
+### TOC
+
+- [Watching for Changes](#watching-for-changes)
+- [Importing Other lua files](#importing-other-lua-files)
+- [String Interpolation](#string-interpolation)
+- [String Functions](#string-functions)
+- [Get Files from a Dir](#get-files-from-a-directory)
+- [Reading Writing Files](#reading--writing-files)
+- [Templates](#templates)
 
 Methods and ways to be able to do basic tasks while working with alvu
 
@@ -11,6 +19,8 @@ I use [entr](https://github.com/eradman/entr) as a file notifier which can run a
 ```sh
 ls docs/**/* | entr -cr alvu --path='./docs'
 ```
+
+> **Note**: since v0.2.9, alvu comes with it's own file watcher and live-reload but is limited to the `public` and `pages` directory and it is still recommended to use `entr` if you wish to handle watching custom paths 
 
 This will list all files in the `docs` folder (root of an alvu project) and then run the alvu command while specifying the base path to be `./docs`
 
@@ -38,7 +48,7 @@ local function interpolate(s, tab)
 end
 
 -- usage
-interpolate("this is a ${message} string", { message = "interpolated" })
+interpolate("this is an ${message} string", { message = "interpolated" })
 ```
 
 ## String Functions
@@ -58,6 +68,18 @@ You can read more about these from the [gopher-lua-libs](https://github.com/vadv
 ## Get files from a directory
 
 If working with blogs and nested data you might wanna get files in a directory and you can use the following function
+
+There's 2 methods, you can either use the `alvu` helper library or you can add the `scandir` function shown below to
+your `libs` folder if you wish to maintain control over the file reading functionality
+
+- Using `alvu` helpers
+
+```lua
+local alvu = require("alvu")
+local all_files = alvu.files(path)
+```
+
+- Custom function
 
 ```lua
 function scandir(directory)

@@ -77,4 +77,4 @@ to each file.
 Pretty self-explanatory but the `public` folder will copy everything
 put into it to the `dist` folder. This can be used for assets, styles, etc.
 
-Let's move forward to [scripting &rarr;]({{.Meta.BaseURL}}02-scripting)
+Let's move forward to [scripting &rarr;]({{.Meta.BaseURL}}concepts/scripting)

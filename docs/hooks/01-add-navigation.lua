@@ -12,9 +12,10 @@ function Writer(filedata)
     local files = alvu.files(pagesPath)
 
     for fileIndex = 1, #files do
-        if not (files[fileIndex] == "_layout.html" or files[fileIndex] == "index.md")
+        local file_name = files[fileIndex]
+        if not (file_name == "_layout.html" or file_name == "index.md" or utils.starts_with(file_name,"concepts/"))
         then
-            local name = string.gsub(files[fileIndex], ".md", "")
+            local name = string.gsub(file_name, ".md", "")
             name = string.gsub(name, ".html", "")
             local title, _ = utils.normalize(name):lower()
 

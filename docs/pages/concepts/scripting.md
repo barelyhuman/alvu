@@ -129,4 +129,4 @@ end
 The above only runs for the file `00-readme.md` and is responsible for copying the contents
 of the `readme.md` and overwriting the `00-readme.md` file's content with it at **build time**
 
-[More about Writers &rarr; ]({{.Meta.BaseURL}}03-writers)
+[More about Writers &rarr; ]({{.Meta.BaseURL}}concepts/writers)

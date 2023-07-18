@@ -23,7 +23,7 @@ sure you order the hooks with file names
 
 ## `Writer`
 
-The [Scripting]({{.Meta.BaseURL}}02-scripting) section, covers most of what this writer does but
+The [Scripting]({{.Meta.BaseURL}}concepts/scripting) section, covers most of what this writer does but
 to reiterate, the `Writer` hooks are called for everyfile in the `pages`
 directory and allow you to manipulate the content of the file before it gets
 compiled

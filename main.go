@@ -21,6 +21,8 @@ import (
 	"strings"
 	"sync"
 
+	_ "embed"
+
 	"github.com/barelyhuman/go/env"
 	"github.com/barelyhuman/go/poller"
 	ghttp "github.com/cjoudrey/gluahttp"
@@ -57,6 +59,9 @@ var hardWraps bool
 var hookCollection HookCollection
 var reloadCh = []chan bool{}
 var serveFlag *bool
+
+//go:embed .commitlog.release
+var release string
 
 var reservedFiles []string = []string{"_head.html", "_tail.html", "_layout.html"}
 
@@ -138,6 +143,10 @@ func main() {
 		memuse()
 	})
 
+	var versionFlag bool
+
+	flag.BoolVar(&versionFlag, "version", false, "version info")
+	flag.BoolVar(&versionFlag, "v", false, "version info")
 	basePathFlag := flag.String("path", ".", "`DIR` to search for the needed folders in")
 	outPathFlag := flag.String("out", "./dist", "`DIR` to output the compiled files to")
 	baseurlFlag := flag.String("baseurl", "/", "`URL` to be used as the root of the project")
@@ -150,6 +159,12 @@ func main() {
 	pollDurationFlag := flag.Int("poll", 350, "Polling duration for file changes in milliseconds")
 
 	flag.Parse()
+
+	// Show version and exit
+	if versionFlag {
+		println(release)
+		os.Exit(0)
+	}
 
 	baseurl = *baseurlFlag
 	basePath = path.Join(*basePathFlag)
@@ -164,6 +179,8 @@ func main() {
 
 	headTailDeprecationWarning := color.ColorString{}
 	headTailDeprecationWarning.Yellow(logPrefix).Yellow("[WARN] use of _tail.html and _head.html is deprecated, please use _layout.html instead")
+
+	os.MkdirAll(publicPath, os.ModePerm)
 
 	alvuApp := &Alvu{
 		publicPath: publicPath,
@@ -627,14 +644,19 @@ func (af *AlvuFile) FlushFile() {
 	// If a layout file was found
 	// write the converted html content into the
 	// layout template file
+
+	layout := template.New("layout")
+	var layoutTemplateData string
 	if af.baseTemplate != nil {
-		layout := template.New("layout")
-		layoutTemplateData := string(readFileToBytes(af.baseTemplate))
-		layoutTemplateData = _injectLiveReload(&layoutTemplateData)
-		toHtml.Reset()
-		layout.Parse(layoutTemplateData)
-		layout.Execute(&toHtml, layoutData)
+		layoutTemplateData = string(readFileToBytes(af.baseTemplate))
+	} else {
+		layoutTemplateData = `<body>{{.Content}}</body>`
 	}
+
+	layoutTemplateData = _injectLiveReload(&layoutTemplateData)
+	toHtml.Reset()
+	layout.Parse(layoutTemplateData)
+	layout.Execute(&toHtml, layoutData)
 
 	io.Copy(
 		f, &toHtml,

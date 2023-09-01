@@ -220,11 +220,11 @@ Which would look, something like this.
 ```md
 # Packages
 
-| name                     | downloads(last 30 days) |
-| ------------------------ | ----------------------- |
-| {{range .Data.packages}} |                         |
-| {{.title}}               | {{.downloads}}          |
-| {{end}}                  |                         |
+| name                       | downloads(last 30 days) |
+| -------------------------- | ----------------------- |
+| { {range .Data.packages} } |                         |
+| { {.title} }               | { {.downloads} }        |
+| { {end} }                  |                         |
 ```
 
 Here the `range .Data.packages` loops through the elements that were returned

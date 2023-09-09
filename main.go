@@ -262,6 +262,7 @@ func main() {
 		fileName := strings.Replace(toProcessItem, pagesPath, "", 1)
 		fileName = prefixSlashPath.ReplaceAllString(fileName, "")
 		destFilePath := strings.Replace(toProcessItem, pagesPath, outPath, 1)
+		isHTML := strings.HasSuffix(fileName, ".html")
 
 		alvuFile := &AlvuFile{
 			lock:         &sync.Mutex{},
@@ -269,6 +270,7 @@ func main() {
 			hooks:        hookCollection,
 			destPath:     destFilePath,
 			name:         fileName,
+			isHTML:       isHTML,
 			headFile:     headFileFd,
 			tailFile:     tailFileFd,
 			baseTemplate: baseFileFd,
@@ -443,6 +445,7 @@ type AlvuFile struct {
 	hooks            HookCollection
 	name             string
 	sourcePath       string
+	isHTML           bool
 	destPath         string
 	meta             map[string]interface{}
 	content          []byte
@@ -633,8 +636,12 @@ func (af *AlvuFile) FlushFile() {
 	bail(err)
 
 	var toHtml bytes.Buffer
-	err = mdProcessor.Convert(preConvertHTML.Bytes(), &toHtml)
-	bail(err)
+	if !af.isHTML {
+		err = mdProcessor.Convert(preConvertHTML.Bytes(), &toHtml)
+		bail(err)
+	} else {
+		toHtml = preConvertHTML
+	}
 
 	layoutData := LayoutRenderData{
 		PageRenderData: renderData,

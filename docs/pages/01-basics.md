@@ -35,6 +35,7 @@ Yeah... and no.
 - `_head.html` - will add the header section to the final HTML (deprecated in v0.2.7)
 - `_tail.html` - will add the footer section to the final HTML (deprecated in v0.2.7)
 - `_layout.html` - defines a common layout for all files that'll be rendered.
+- `_404.html` - alvu will serve this file whenever the requested page is not found. (Nested within `_layout.html`, if exists)
 
 The `_head.html` and `_tail.html` files were used as placeholders for
 repeated layout across your markdown files, this has now been replaced

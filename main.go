@@ -59,11 +59,12 @@ var hardWraps bool
 var hookCollection HookCollection
 var reloadCh = []chan bool{}
 var serveFlag *bool
+var notFoundPageExists bool
 
 //go:embed .commitlog.release
 var release string
 
-var reservedFiles []string = []string{"_head.html", "_tail.html", "_layout.html"}
+var layoutFiles []string = []string{"_head.html", "_tail.html", "_layout.html"}
 
 type SiteMeta struct {
 	BaseURL string
@@ -173,6 +174,7 @@ func main() {
 	headFilePath := path.Join(pagesPath, "_head.html")
 	baseFilePath := path.Join(pagesPath, "_layout.html")
 	tailFilePath := path.Join(pagesPath, "_tail.html")
+	notFoundFilePath := path.Join(pagesPath, "404.html")
 	outPath = path.Join(*outPathFlag)
 	hooksPath := path.Join(*basePathFlag, *hooksPathFlag)
 	hardWraps = *hardWrapsFlag
@@ -228,6 +230,17 @@ func main() {
 		}
 	} else {
 		fmt.Println(headTailDeprecationWarning.String())
+	}
+
+	onDebug(func() {
+		debugInfo("Checking if _404.html exists")
+		memuse()
+	})
+	if _, err := os.Stat(notFoundFilePath); errors.Is(err, os.ErrNotExist) {
+		notFoundPageExists = false
+		log.Println("no _404.html found, skipping")
+	} else {
+		notFoundPageExists = true
 	}
 
 	alvuApp.CopyPublic()
@@ -337,7 +350,7 @@ func CollectFilesToProcess(basepath string) []string {
 	for _, pathInfo := range pathstoprocess {
 		_path := path.Join(basepath, pathInfo.Name())
 
-		if Contains(reservedFiles, pathInfo.Name()) {
+		if Contains(layoutFiles, pathInfo.Name()) {
 			continue
 		}
 
@@ -876,8 +889,19 @@ func normalizeFilePath(path string) string {
 }
 
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotFound)
-	fmt.Fprint(w, "404, Page not found....")
+	if notFoundPageExists {
+		compiledNotFoundFile := filepath.Join(outPath, "404.html")
+		notFoundFile, err := os.ReadFile(compiledNotFoundFile)
+		if err != nil {
+			http.Error(w, "404, Page not found....", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(notFoundFile)
+		return
+	}
+	http.Error(w, "404, Page not found....", http.StatusNotFound)
 }
 
 func Contains(collection []string, item string) bool {

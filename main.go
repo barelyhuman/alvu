@@ -11,7 +11,6 @@ import (
 
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -66,8 +65,6 @@ var notFoundPageExists bool
 var release string
 
 var layoutFiles []string = []string{"_head.html", "_tail.html", "_layout.html"}
-
-// var reservedFiles []string = []string{"_404.html"} // no special attention required as of now
 
 type SiteMeta struct {
 	BaseURL string
@@ -177,7 +174,7 @@ func main() {
 	headFilePath := path.Join(pagesPath, "_head.html")
 	baseFilePath := path.Join(pagesPath, "_layout.html")
 	tailFilePath := path.Join(pagesPath, "_tail.html")
-	notFoundFilePath := path.Join(pagesPath, "_404.html")
+	notFoundFilePath := path.Join(pagesPath, "404.html")
 	outPath = path.Join(*outPathFlag)
 	hooksPath := path.Join(*basePathFlag, *hooksPathFlag)
 	hardWraps = *hardWrapsFlag
@@ -893,7 +890,8 @@ func normalizeFilePath(path string) string {
 
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	if notFoundPageExists {
-		notFoundFile, err := ioutil.ReadFile(filepath.Join(outPath, "_404.html"))
+		compiledNotFoundFile := filepath.Join(outPath, "404.html")
+		notFoundFile, err := os.ReadFile(compiledNotFoundFile)
 		if err != nil {
 			http.Error(w, "404, Page not found....", http.StatusNotFound)
 			return

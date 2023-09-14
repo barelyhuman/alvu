@@ -24,6 +24,7 @@
 <p><a href=/alvu/04-dev-server> dev server</a></p>
 <p><a href=/alvu/05-CLI> cli</a></p>
 <p><a href=/alvu/06-recipes> recipes</a></p>
+<p><a href=/alvu/404></a></p>
 </nav>
 </header>
 <main class="container">
@@ -54,6 +55,7 @@ these can be of the following formats.</p>
 <li><code>_head.html</code> - will add the header section to the final HTML (deprecated in v0.2.7)</li>
 <li><code>_tail.html</code> - will add the footer section to the final HTML (deprecated in v0.2.7)</li>
 <li><code>_layout.html</code> - defines a common layout for all files that'll be rendered.</li>
+<li><code>404.html</code> - alvu will serve this file whenever the requested page is not found (Nested within <code>_layout.html</code>, if exists). This is only true for the development mode, for built dist, if the deployed platform needs special handling for the 404 static file, then that'll need to be configured by you accordingly</li>
 </ul>
 <p>The <code>_head.html</code> and <code>_tail.html</code> files were used as placeholders for
 repeated layout across your markdown files, this has now been replaced

@@ -233,12 +233,12 @@ func main() {
 	}
 
 	onDebug(func() {
-		debugInfo("Checking if _404.html exists")
+		debugInfo("Checking if 404.html exists")
 		memuse()
 	})
 	if _, err := os.Stat(notFoundFilePath); errors.Is(err, os.ErrNotExist) {
 		notFoundPageExists = false
-		log.Println("no _404.html found, skipping")
+		log.Println("no 404.html found, skipping")
 	} else {
 		notFoundPageExists = true
 	}

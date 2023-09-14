@@ -35,7 +35,7 @@ Yeah... and no.
 - `_head.html` - will add the header section to the final HTML (deprecated in v0.2.7)
 - `_tail.html` - will add the footer section to the final HTML (deprecated in v0.2.7)
 - `_layout.html` - defines a common layout for all files that'll be rendered.
-- `_404.html` - alvu will serve this file whenever the requested page is not found. (Nested within `_layout.html`, if exists)
+- `404.html` - alvu will serve this file whenever the requested page is not found (Nested within `_layout.html`, if exists). This is only true for the development mode, for built dist, if the deployed platform needs special handling for the 404 static file, then that'll need to be configured by you accordingly
 
 The `_head.html` and `_tail.html` files were used as placeholders for
 repeated layout across your markdown files, this has now been replaced
@@ -56,7 +56,7 @@ can be defined as shown below
 
 > **Note**: Make sure to remove the spaces between the `{` and `}` in the above code snippet, these were added to avoid getting replaced by the template code
 
-We deprecated `_head.html` and `_tail.html` because they would cause abnormalities in the HTML output causing certain element tags to be duplicated. Which isn't semantically correct, also the template execution for these would end up creating arbitrary string nodes at the end of the HTML, which isn't intentional. 
+We deprecated `_head.html` and `_tail.html` because they would cause abnormalities in the HTML output causing certain element tags to be duplicated. Which isn't semantically correct, also the template execution for these would end up creating arbitrary string nodes at the end of the HTML, which isn't intentional.
 
 The fix for this would include writing an HTML dedupe handler, which might be a project in itself considering all the edge cases. It was easier to just let golang templates get what they want, hence the introduction of the `_layout.html` file.
 

@@ -11,10 +11,15 @@ import (
 
 	"github.com/barelyhuman/alvu/transformers"
 	"github.com/barelyhuman/alvu/transformers/markdown"
-	"golang.org/x/net/html"
 
 	htmlT "github.com/barelyhuman/alvu/transformers/html"
 )
+
+// Constants
+const slotStartTag = "<slot>"
+const slotEndTag = "</slot>"
+const slotSelfEndingTag = "<slot/>"
+const contentTag = "{{.Content}}"
 
 type AlvuConfig struct {
 	HookDir  string
@@ -33,10 +38,13 @@ type AlvuConfig struct {
 	Transformers map[string][]transformers.Transfomer
 
 	// Internals
-	_layoutBuffer bytes.Buffer
+	logger Logger
 }
 
 func (ac *AlvuConfig) Run() error {
+	ac.logger = Logger{
+		logPrefix: "[alvu]",
+	}
 	ac.Transformers = map[string][]transformers.Transfomer{
 		".html": {
 			&htmlT.HTMLTransformer{},
@@ -69,7 +77,6 @@ func (ac *AlvuConfig) Run() error {
 
 	ac.HandlePublicFiles(publicFiles)
 	return ac.FlushFiles(processedFiles)
-
 }
 
 func (ac *AlvuConfig) ReadLayout() string {
@@ -113,6 +120,10 @@ func (ac *AlvuConfig) FlushFiles(files []transformers.TransformedFile) error {
 		return err
 	}
 
+	if hasLegacySlot(ac.ReadLayout()) {
+		ac.logger.Warning("Please use `<slot></slot>` or `<slot/>` instead of `{{.Content}}` in _layout.html")
+	}
+
 	for _, tf := range files {
 		originalDir, baseFile := filepath.Split(tf.SourcePath)
 		newDir := strings.TrimPrefix(originalDir, "pages")
@@ -139,7 +150,7 @@ func (ac *AlvuConfig) FlushFiles(files []transformers.TransformedFile) error {
 			return err
 		}
 
-		replaced, _ := replaceBodyTag(
+		replaced, _ := ac.injectInSlot(
 			ac.ReadLayout(),
 			string(sourceFileData),
 		)
@@ -151,6 +162,8 @@ func (ac *AlvuConfig) FlushFiles(files []transformers.TransformedFile) error {
 		}
 	}
 
+	ac.logger.Info("Output in: " + ac.OutDir)
+	ac.logger.Success("Done")
 	return nil
 }
 
@@ -203,33 +216,29 @@ func recursiveRead(dir string) (dirs []string, err error) {
 	return
 }
 
-func replaceBodyTag(htmlString string, replacement string) (string, error) {
-	doc, err := html.Parse(strings.NewReader(htmlString))
-	if err != nil {
-		return "", err
+func (ac *AlvuConfig) injectInSlot(htmlString string, replacement string) (string, error) {
+	if hasLegacySlot(htmlString) {
+		return injectInLegacySlot(htmlString, replacement), nil
 	}
 
-	var traverse func(*html.Node)
-	traverse = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "body" {
-			replaceNodes, _ := html.ParseFragment(strings.NewReader(replacement), n)
-			for _, childNodes := range replaceNodes {
-				n.AppendChild(childNodes)
-			}
-			return
-		}
-
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			traverse(c)
-		}
+	slotStartPos := strings.Index(htmlString, slotStartTag)
+	slotJSXTagPos := strings.Index(htmlString, slotSelfEndingTag)
+	slotEndPos := strings.Index(htmlString, slotEndTag)
+	if slotStartPos == -1 && slotEndPos == -1 && slotJSXTagPos == -1 {
+		return htmlString, nil
 	}
+	baseString := strings.Replace(htmlString, slotEndTag, "", slotEndPos)
+	return strings.Replace(baseString, slotStartTag, replacement, slotStartPos), nil
+}
 
-	traverse(doc)
+func hasLegacySlot(htmlString string) bool {
+	return strings.Contains(htmlString, contentTag)
+}
 
-	var buf strings.Builder
-	if err := html.Render(&buf, doc); err != nil {
-		return "", err
+func injectInLegacySlot(htmlString string, replacement string) string {
+	contentTagPos := strings.Index(htmlString, contentTag)
+	if contentTagPos == -1 {
+		return htmlString
 	}
-
-	return buf.String(), nil
+	return strings.Replace(htmlString, contentTag, replacement, contentTagPos)
 }

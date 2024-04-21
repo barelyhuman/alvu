@@ -27,3 +27,9 @@ func (l *Logger) Warning(msg string) {
 	cs.Gray(l.logPrefix).Reset(" ").Yellow(msg)
 	fmt.Println(cs.String())
 }
+
+func (l *Logger) Error(msg string) {
+	cs := color.ColorString{}
+	cs.Gray(l.logPrefix).Reset(" ").Red(msg)
+	fmt.Println(cs.String())
+}

@@ -1,13 +1,14 @@
 package alvu
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	templateHTML "html/template"
 
 	"github.com/barelyhuman/alvu/transformers"
 	"github.com/barelyhuman/alvu/transformers/markdown"
@@ -18,8 +19,17 @@ import (
 // Constants
 const slotStartTag = "<slot>"
 const slotEndTag = "</slot>"
-const slotSelfEndingTag = "<slot/>"
 const contentTag = "{{.Content}}"
+
+type SiteMeta struct {
+	BaseURL string
+}
+
+type PageRenderData struct {
+	Meta   SiteMeta
+	Data   map[string]interface{}
+	Extras map[string]interface{}
+}
 
 type AlvuConfig struct {
 	HookDir  string
@@ -45,6 +55,11 @@ func (ac *AlvuConfig) Run() error {
 	ac.logger = Logger{
 		logPrefix: "[alvu]",
 	}
+
+	hooksHandler := Hooks{
+		ac: *ac,
+	}
+
 	ac.Transformers = map[string][]transformers.Transfomer{
 		".html": {
 			&htmlT.HTMLTransformer{},
@@ -73,7 +88,12 @@ func (ac *AlvuConfig) Run() error {
 		return err
 	}
 
-	processedFiles := normalizedFiles
+	var processedFiles []HookedFile
+
+	hooksHandler.Load()
+	for _, tf := range normalizedFiles {
+		processedFiles = append(processedFiles, hooksHandler.ProcessFile(tf))
+	}
 
 	ac.HandlePublicFiles(publicFiles)
 	return ac.FlushFiles(processedFiles)
@@ -115,19 +135,20 @@ func (ac *AlvuConfig) HandlePublicFiles(files []string) (err error) {
 	return
 }
 
-func (ac *AlvuConfig) FlushFiles(files []transformers.TransformedFile) error {
+func (ac *AlvuConfig) FlushFiles(files []HookedFile) error {
 	if err := os.MkdirAll(ac.OutDir, os.ModePerm); err != nil {
 		return err
 	}
 
 	if hasLegacySlot(ac.ReadLayout()) {
-		ac.logger.Warning("Please use `<slot></slot>` or `<slot/>` instead of `{{.Content}}` in _layout.html")
+		ac.logger.Warning("Please use `<slot></slot>` instead of `{{.Content}}` in _layout.html")
 	}
 
-	for _, tf := range files {
-		originalDir, baseFile := filepath.Split(tf.SourcePath)
+	for i := range files {
+		hookedFile := files[i]
+		originalDir, baseFile := filepath.Split(hookedFile.SourcePath)
 		newDir := strings.TrimPrefix(originalDir, "pages")
-		fileWithNewExtension := strings.TrimSuffix(baseFile, tf.Extension) + ".html"
+		fileWithNewExtension := strings.TrimSuffix(baseFile, hookedFile.Extension) + ".html"
 		destFile := filepath.Join(
 			ac.OutDir,
 			newDir,
@@ -145,18 +166,27 @@ func (ac *AlvuConfig) FlushFiles(files []transformers.TransformedFile) error {
 		}
 		defer destWriter.Close()
 
-		sourceFileData, err := os.ReadFile(tf.TransformedFile)
-		if err != nil {
-			return err
-		}
-
 		replaced, _ := ac.injectInSlot(
 			ac.ReadLayout(),
-			string(sourceFileData),
+			string(hookedFile.content),
 		)
 
-		_, err = io.Copy(destWriter, bytes.NewBuffer([]byte(replaced)))
+		template := templateHTML.New("temporaryTemplate")
+		template, err = template.Parse(replaced)
+		if err != nil {
+			ac.logger.Error(fmt.Sprintf("Failed to write to dist file with error: %v", err))
+			panic("")
+		}
 
+		renderData := PageRenderData{
+			Meta: SiteMeta{
+				BaseURL: ac.BaseURL,
+			},
+			Data:   hookedFile.data,
+			Extras: hookedFile.extras,
+		}
+
+		err = template.Execute(destWriter, renderData)
 		if err != nil {
 			return err
 		}
@@ -188,11 +218,22 @@ func runTransfomers(filesToProcess []string, ac *AlvuConfig) ([]transformers.Tra
 	return normalizedFiles, nil
 }
 
-func (ac *AlvuConfig) ReadDir(dir string) (dirs []string, err error) {
-	return recursiveRead(dir)
+func (ac *AlvuConfig) ReadDir(dir string) (filepaths []string, err error) {
+	readFilepaths, err := recursiveRead(dir)
+	if err != nil {
+		return
+	}
+	sanitizedCollection := []string{}
+	for _, v := range readFilepaths {
+		if filepath.Base(v) == "_layout.html" {
+			continue
+		}
+		sanitizedCollection = append(sanitizedCollection, v)
+	}
+	return sanitizedCollection, nil
 }
 
-func recursiveRead(dir string) (dirs []string, err error) {
+func recursiveRead(dir string) (filepaths []string, err error) {
 	dirEntry, err := os.ReadDir(
 		dir,
 	)
@@ -205,11 +246,11 @@ func recursiveRead(dir string) (dirs []string, err error) {
 		if de.IsDir() {
 			subDirs, err := recursiveRead(filepath.Join(dir, de.Name()))
 			if err != nil {
-				return dirs, err
+				return filepaths, err
 			}
-			dirs = append(dirs, subDirs...)
+			filepaths = append(filepaths, subDirs...)
 		} else {
-			dirs = append(dirs, filepath.Join(dir, de.Name()))
+			filepaths = append(filepaths, filepath.Join(dir, de.Name()))
 		}
 	}
 
@@ -220,11 +261,9 @@ func (ac *AlvuConfig) injectInSlot(htmlString string, replacement string) (strin
 	if hasLegacySlot(htmlString) {
 		return injectInLegacySlot(htmlString, replacement), nil
 	}
-
 	slotStartPos := strings.Index(htmlString, slotStartTag)
-	slotJSXTagPos := strings.Index(htmlString, slotSelfEndingTag)
 	slotEndPos := strings.Index(htmlString, slotEndTag)
-	if slotStartPos == -1 && slotEndPos == -1 && slotJSXTagPos == -1 {
+	if slotStartPos == -1 && slotEndPos == -1 {
 		return htmlString, nil
 	}
 	baseString := strings.Replace(htmlString, slotEndTag, "", slotEndPos)

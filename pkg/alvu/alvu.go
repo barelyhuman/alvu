@@ -12,6 +12,8 @@ import (
 	"github.com/barelyhuman/alvu/transformers"
 	"github.com/barelyhuman/alvu/transformers/markdown"
 	"golang.org/x/net/html"
+
+	htmlT "github.com/barelyhuman/alvu/transformers/html"
 )
 
 type AlvuConfig struct {
@@ -36,6 +38,9 @@ type AlvuConfig struct {
 
 func (ac *AlvuConfig) Run() error {
 	ac.Transformers = map[string][]transformers.Transfomer{
+		".html": {
+			&htmlT.HTMLTransformer{},
+		},
 		".md": {
 			&markdown.MarkdownTransformer{
 				EnableHardWrap:     ac.EnableHardWrap,
@@ -156,13 +161,9 @@ func runTransfomers(filesToProcess []string, ac *AlvuConfig) ([]transformers.Tra
 		extension := filepath.Ext(fileToNormalize)
 
 		if len(ac.Transformers[extension]) < 1 {
-			normalizedFiles = append(normalizedFiles, transformers.TransformedFile{
-				SourcePath:      fileToNormalize,
-				Extension:       filepath.Ext(fileToNormalize),
-				TransformedFile: fileToNormalize,
-			})
 			continue
 		}
+
 		for _, transformer := range ac.Transformers[extension] {
 			transformedFile, err := transformer.Transform(fileToNormalize)
 			if err != nil {

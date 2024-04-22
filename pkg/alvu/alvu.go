@@ -48,7 +48,8 @@ type AlvuConfig struct {
 	Transformers map[string][]transformers.Transfomer
 
 	// Internals
-	logger Logger
+	logger      Logger
+	hookHandler *Hooks
 }
 
 func (ac *AlvuConfig) Run() error {
@@ -59,6 +60,7 @@ func (ac *AlvuConfig) Run() error {
 	hooksHandler := Hooks{
 		ac: *ac,
 	}
+	ac.hookHandler = &hooksHandler
 
 	ac.Transformers = map[string][]transformers.Transfomer{
 		".html": {
@@ -90,7 +92,10 @@ func (ac *AlvuConfig) Run() error {
 
 	var processedFiles []HookedFile
 
-	hooksHandler.Load()
+	ac.hookHandler.Load()
+
+	ac.hookHandler.runLifeCycleHooks("OnStart")
+
 	for _, tf := range normalizedFiles {
 		processedFiles = append(processedFiles, hooksHandler.ProcessFile(tf))
 	}
@@ -194,6 +199,8 @@ func (ac *AlvuConfig) FlushFiles(files []HookedFile) error {
 
 	ac.logger.Info("Output in: " + ac.OutDir)
 	ac.logger.Success("Done")
+	ac.hookHandler.runLifeCycleHooks("OnFinish")
+
 	return nil
 }
 

@@ -87,6 +87,43 @@ func (h *Hooks) Load() {
 	}
 }
 
+func (h *Hooks) runLifeCycleHooks(hookType string) error {
+	keys := make([]string, 0, len(h.forSpecificFiles))
+	for k := range h.forSpecificFiles {
+		keys = append(keys, k)
+	}
+
+	localCollection := []*HookSource{}
+	localCollection = append(localCollection, h.collection...)
+
+	for _, v := range keys {
+		localCollection = append(localCollection, h.forSpecificFiles[v]...)
+	}
+
+	sort.Slice(localCollection, func(i, j int) bool {
+		return strings.Compare(localCollection[i].filename, localCollection[j].filename) == -1
+	})
+
+	for i := range localCollection {
+		s := localCollection[i]
+		hookFunc := s.luaState.GetGlobal(hookType)
+
+		if hookFunc == lua.LNil {
+			continue
+		}
+
+		if err := s.luaState.CallByParam(lua.P{
+			Fn:      hookFunc,
+			NRet:    0,
+			Protect: true,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (h *Hooks) readHookFile(filename string, basepath string, logger Logger) *HookSource {
 	lState := lua.NewState()
 	luaAlvu.Preload(lState)

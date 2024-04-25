@@ -2,13 +2,18 @@ package markdown
 
 import (
 	"bytes"
+	"net/url"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 type MarkdownTransformer struct {
@@ -16,6 +21,7 @@ type MarkdownTransformer struct {
 	EnableHardWrap     bool
 	EnableHighlighting bool
 	HighlightingTheme  string
+	BaseURL            string
 }
 
 func (mt *MarkdownTransformer) TransformContent(input []byte) (result []byte, err error) {
@@ -44,9 +50,15 @@ func (mt *MarkdownTransformer) EnsureProcessor() {
 	if mt.EnableHardWrap {
 		rendererOptions = append(rendererOptions, html.WithHardWraps())
 	}
+
+	linkRewriter := &relativeLinkRewriter{
+		baseURL: mt.BaseURL,
+	}
+
 	gmPlugins := []goldmark.Option{
 		goldmark.WithExtensions(extension.GFM, extension.Footnote),
 		goldmark.WithParserOptions(
+			parser.WithASTTransformers(util.Prioritized(linkRewriter, 100)),
 			parser.WithAutoHeadingID(),
 		),
 		goldmark.WithRendererOptions(
@@ -63,4 +75,45 @@ func (mt *MarkdownTransformer) EnsureProcessor() {
 	}
 
 	mt.processor = goldmark.New(gmPlugins...)
+}
+
+type relativeLinkRewriter struct {
+	baseURL string
+}
+
+func (rlr *relativeLinkRewriter) Transform(doc *ast.Document, reader text.Reader, pctx parser.Context) {
+	ast.Walk(doc, func(node ast.Node, enter bool) (ast.WalkStatus, error) {
+		if !enter {
+			return ast.WalkContinue, nil
+		}
+
+		link, ok := node.(*ast.Link)
+		if !ok {
+			return ast.WalkContinue, nil
+		}
+
+		validURL, _ := url.Parse(string(link.Destination))
+
+		if validURL.Scheme == "http" || validURL.Scheme == "https" || validURL.Scheme == "mailto" {
+			return ast.WalkContinue, nil
+		}
+
+		// from root
+		if strings.HasPrefix(validURL.Path, "/") {
+			newDestination, _ := url.JoinPath(
+				rlr.baseURL,
+				validURL.Path,
+			)
+			link.Destination = []byte(newDestination)
+		}
+
+		// from current file
+		// TODO: add handling for relative
+		// path and then prepend the baseURL
+		if strings.HasPrefix(validURL.Path, "./") {
+
+		}
+
+		return ast.WalkSkipChildren, nil
+	})
 }

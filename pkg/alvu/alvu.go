@@ -72,6 +72,7 @@ func (ac *AlvuConfig) Run() error {
 				EnableHardWrap:     ac.EnableHardWrap,
 				EnableHighlighting: ac.EnableHighlighting,
 				HighlightingTheme:  ac.HighlightingTheme,
+				BaseURL:            ac.BaseURL,
 			},
 		},
 	}

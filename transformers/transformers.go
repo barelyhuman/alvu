@@ -7,5 +7,5 @@ type TransformedFile struct {
 }
 
 type Transfomer interface {
-	Transform(filePath string) (TransformedFile, error)
+	TransformContent(data []byte) ([]byte, error)
 }

@@ -80,6 +80,8 @@ func (ac *AlvuConfig) Run() error {
 		return err
 	}
 
+	ac.logger.Debug(fmt.Sprintf("filesToProcess: %v", filesToProcess))
+
 	publicFiles, err := ac.ReadDir(filepath.Join(ac.RootPath, "public"))
 	if err != nil {
 		return err
@@ -140,6 +142,22 @@ func (ac *AlvuConfig) HandlePublicFiles(files []string) (err error) {
 	return
 }
 
+func (ac *AlvuConfig) createTransformedFile(filePath string, content string) (tranformedFile transformers.TransformedFile, err error) {
+	fileExt := filepath.Ext(filePath)
+	fileWriter, err := os.CreateTemp("", "alvu-")
+	if err != nil {
+		return
+	}
+	_, err = fileWriter.WriteString(content)
+	if err != nil {
+		return
+	}
+	tranformedFile.TransformedFile = fileWriter.Name()
+	tranformedFile.SourcePath = filePath
+	tranformedFile.Extension = fileExt
+	return
+}
+
 func (ac *AlvuConfig) FlushFiles(files []HookedFile) error {
 	if err := os.MkdirAll(ac.OutDir, os.ModePerm); err != nil {
 		return err
@@ -171,12 +189,31 @@ func (ac *AlvuConfig) FlushFiles(files []HookedFile) error {
 		}
 		defer destWriter.Close()
 
+		if len(hookedFile.transform) > 1 {
+			for _, t := range ac.Transformers[hookedFile.transform] {
+				afterTransform, err := t.TransformContent(hookedFile.content)
+				if err != nil {
+					return err
+				}
+				hookedFile.content = afterTransform
+			}
+		}
+
 		replaced, _ := ac.injectInSlot(
 			ac.ReadLayout(),
 			string(hookedFile.content),
 		)
 
 		template := templateHTML.New("temporaryTemplate")
+		template = template.Funcs(templateHTML.FuncMap{
+			"transform": func(extension string, content string) templateHTML.HTML {
+				var transformed []byte = []byte(content)
+				for _, t := range ac.Transformers[extension] {
+					transformed, _ = t.TransformContent(transformed)
+				}
+				return templateHTML.HTML(transformed)
+			},
+		})
 		template, err = template.Parse(replaced)
 		if err != nil {
 			ac.logger.Error(fmt.Sprintf("Failed to write to dist file with error: %v", err))
@@ -214,13 +251,25 @@ func runTransfomers(filesToProcess []string, ac *AlvuConfig) ([]transformers.Tra
 			continue
 		}
 
+		originalContent, err := os.ReadFile(fileToNormalize)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file %v with error %v", fileToNormalize, err)
+		}
+
 		for _, transformer := range ac.Transformers[extension] {
-			transformedFile, err := transformer.Transform(fileToNormalize)
+			nextContent, err := transformer.TransformContent(originalContent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to transform file: %v, with error: %v", fileToNormalize, err)
 			}
-			normalizedFiles = append(normalizedFiles, transformedFile)
+			originalContent = nextContent
 		}
+
+		transformedFile, err := ac.createTransformedFile(fileToNormalize, string(originalContent))
+		if err != nil {
+			return nil, fmt.Errorf("failed to transform file: %v, with error: %v", fileToNormalize, err)
+		}
+
+		normalizedFiles = append(normalizedFiles, transformedFile)
 	}
 	return normalizedFiles, nil
 }

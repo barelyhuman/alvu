@@ -35,9 +35,10 @@ type Hooks struct {
 
 type HookedFile struct {
 	transformers.TransformedFile
-	content []byte
-	data    map[string]interface{}
-	extras  map[string]interface{}
+	content   []byte
+	transform string
+	data      map[string]interface{}
+	extras    map[string]interface{}
 }
 
 func (h *Hooks) Load() {
@@ -162,7 +163,7 @@ func (h *Hooks) ProcessFile(file transformers.TransformedFile) (hookedFile Hooke
 		WriteableContent string `json:"content"`
 		// HTMLContent      string                 `json:"html"`
 	}{
-		Name:             strings.TrimPrefix(file.SourcePath, filepath.Join(h.ac.RootPath, "pages")),
+		Name:             filepath.Clean(strings.TrimPrefix(strings.TrimPrefix(file.SourcePath, filepath.Join(h.ac.RootPath, "pages")), "/")),
 		SourcePath:       file.SourcePath,
 		WriteableContent: string(fileData),
 	}
@@ -215,9 +216,9 @@ func (h *Hooks) ProcessFile(file transformers.TransformedFile) (hookedFile Hooke
 			hookedFile.content = []byte(stringVal)
 		}
 
-		// if fromPlug["name"] != nil {
-		// 	hookedFile.content = []byte(fmt.Sprintf("%v", fromPlug["name"]))
-		// }
+		if fromPlug["transform"] != nil {
+			hookedFile.transform = fmt.Sprintf("%v", fromPlug["transform"])
+		}
 
 		if fromPlug["data"] != nil {
 			hookedFile.data = mergeMapWithCheck(hookedFile.data, fromPlug["data"])

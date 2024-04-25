@@ -1,11 +1,8 @@
 package markdown
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
+	"bytes"
 
-	"github.com/barelyhuman/alvu/transformers"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting"
 	"github.com/yuin/goldmark/extension"
@@ -21,41 +18,24 @@ type MarkdownTransformer struct {
 	HighlightingTheme  string
 }
 
-func (mt *MarkdownTransformer) Transform(filePath string) (transformedFile transformers.TransformedFile, err error) {
-	if mt.processor == nil {
-		mt.Init()
-	}
+func (mt *MarkdownTransformer) TransformContent(input []byte) (result []byte, err error) {
+	mt.EnsureProcessor()
 
-	fileBytes, err := os.ReadFile(filePath)
+	var buffer bytes.Buffer
+	err = mt.processor.Convert(input, &buffer)
 	if err != nil {
 		return
 	}
 
-	tmpDir := os.TempDir()
-	filename := filepath.Base(filePath)
-	fileExt := filepath.Ext(filename)
-	filename = strings.TrimSuffix(filename, fileExt)
-	filename += ".html"
-	tmpFile := filepath.Join(tmpDir, filename)
-
-	fileWriter, err := os.Create(tmpFile)
-	if err != nil {
-		return
-	}
-
-	err = mt.processor.Convert(fileBytes, fileWriter)
-	if err != nil {
-		return
-	}
-
-	return transformers.TransformedFile{
-		SourcePath:      filePath,
-		TransformedFile: tmpFile,
-		Extension:       fileExt,
-	}, nil
+	result = buffer.Bytes()
+	return
 }
 
-func (mt *MarkdownTransformer) Init() {
+func (mt *MarkdownTransformer) EnsureProcessor() {
+	if mt.processor != nil {
+		return
+	}
+
 	rendererOptions := []renderer.Option{
 		html.WithXHTML(),
 		html.WithUnsafe(),

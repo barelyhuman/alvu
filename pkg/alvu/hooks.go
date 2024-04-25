@@ -42,24 +42,26 @@ type HookedFile struct {
 }
 
 func (h *Hooks) Load() {
+	hookDir := filepath.Clean(filepath.Join(h.ac.RootPath, h.ac.HookDir))
+	h.ac.logger.Debug(fmt.Sprintf("hookDir: %v\n", hookDir))
 	hookFiles := []string{}
-	folderInfo, err := os.Stat(h.ac.HookDir)
+	_, err := os.Stat(hookDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return
 		}
-		readHookDirError(err, h.ac.HookDir, h.ac.logger)
+		readHookDirError(err, hookDir, h.ac.logger)
 	}
 
-	file, err := os.Open(folderInfo.Name())
-	readHookDirError(err, h.ac.HookDir, h.ac.logger)
+	file, err := os.Open(hookDir)
+	readHookDirError(err, hookDir, h.ac.logger)
 	childs, err := file.Readdirnames(1)
-	readHookDirError(err, h.ac.HookDir, h.ac.logger)
+	readHookDirError(err, hookDir, h.ac.logger)
 	if len(childs) == 0 {
 		return
 	}
 
-	filepath.WalkDir(h.ac.HookDir, func(path string, d fs.DirEntry, err error) error {
+	filepath.WalkDir(hookDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			h.ac.logger.Error(fmt.Sprintf("Issue reading %v, with error: %v", path, err))
 			return nil
@@ -70,7 +72,7 @@ func (h *Hooks) Load() {
 		if filepath.Ext(path) != ".lua" {
 			return nil
 		}
-		hookFiles = append(hookFiles, filepath.Join(h.ac.RootPath, path))
+		hookFiles = append(hookFiles, filepath.Join(path))
 		return nil
 	})
 
@@ -132,14 +134,16 @@ func (h *Hooks) readHookFile(filename string, basepath string, logger Logger) *H
 	yamlLib.Preload(lState)
 	stringsLib.Preload(lState)
 	lState.PreloadModule("http", ghttp.NewHttpModule(&http.Client{}).Loader)
-	if err := lState.DoFile(filename); err != nil {
-		logger.Error(fmt.Sprintf("Failed to execute hook: %v, with error: %v\n", filename, err))
-		panic("")
-	}
+
 	if basepath == "." {
 		lState.SetGlobal("workingdir", lua.LString(""))
 	} else {
 		lState.SetGlobal("workingdir", lua.LString(basepath))
+	}
+
+	if err := lState.DoFile(filename); err != nil {
+		logger.Error(fmt.Sprintf("Failed to execute hook: %v, with error: %v\n", filename, err))
+		panic("")
 	}
 	forFile := lState.GetGlobal("ForFile")
 	forFileValue := forFile.String()
@@ -153,7 +157,9 @@ func (h *Hooks) readHookFile(filename string, basepath string, logger Logger) *H
 
 func (h *Hooks) ProcessFile(file transformers.TransformedFile) (hookedFile HookedFile) {
 	hookedFile.TransformedFile = file
+
 	fileData, _ := os.ReadFile(file.TransformedFile)
+	hookedFile.content = fileData
 
 	hookInput := struct {
 		Name       string `json:"name"`
@@ -240,6 +246,7 @@ func readHookDirError(err error, directory string, logger Logger) {
 	logger.Error(
 		fmt.Sprintf("Failed to read the hooks dir: %v, with error: %v\n", directory, err),
 	)
+	panic("")
 }
 
 func mergeMapWithCheck(maps ...any) (source map[string]interface{}) {

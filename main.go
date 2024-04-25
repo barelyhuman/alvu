@@ -65,7 +65,7 @@ func main() {
 			&cli.StringFlag{
 				Name:    "port",
 				Usage:   "port to use for serving the application",
-				Value:   ":3000",
+				Value:   "3000",
 				Aliases: []string{"p"},
 			},
 		},

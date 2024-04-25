@@ -3,6 +3,7 @@ package alvu
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,7 +104,12 @@ func (ac *AlvuConfig) Run() error {
 	}
 
 	ac.HandlePublicFiles(publicFiles)
-	return ac.FlushFiles(processedFiles)
+	err = ac.FlushFiles(processedFiles)
+	if err != nil {
+		return err
+	}
+
+	return ac.StartServer()
 }
 
 func (ac *AlvuConfig) ReadLayout() string {
@@ -128,7 +134,7 @@ func (ac *AlvuConfig) HandlePublicFiles(files []string) (err error) {
 		file := v
 		go func() {
 			destFile := filepath.Clean(file)
-			destFile = strings.TrimPrefix(destFile, "public")
+			destFile = strings.TrimPrefix(destFile, filepath.Join(ac.RootPath, "public"))
 			destFile = filepath.Join(ac.OutDir, destFile)
 			os.MkdirAll(filepath.Dir(destFile), os.ModePerm)
 
@@ -148,6 +154,8 @@ func (ac *AlvuConfig) createTransformedFile(filePath string, content string) (tr
 	if err != nil {
 		return
 	}
+	defer fileWriter.Close()
+
 	_, err = fileWriter.WriteString(content)
 	if err != nil {
 		return
@@ -170,13 +178,15 @@ func (ac *AlvuConfig) FlushFiles(files []HookedFile) error {
 	for i := range files {
 		hookedFile := files[i]
 		originalDir, baseFile := filepath.Split(hookedFile.SourcePath)
-		newDir := strings.TrimPrefix(originalDir, "pages")
+		newDir := strings.TrimPrefix(originalDir, filepath.Join(ac.RootPath, "pages"))
 		fileWithNewExtension := strings.TrimSuffix(baseFile, hookedFile.Extension) + ".html"
 		destFile := filepath.Join(
 			ac.OutDir,
 			newDir,
 			fileWithNewExtension,
 		)
+
+		ac.logger.Debug(fmt.Sprintf("originalFile:%v, desFile: %v", hookedFile.SourcePath, destFile))
 
 		err := os.MkdirAll(filepath.Dir(destFile), os.ModePerm)
 		if err != nil {
@@ -199,10 +209,14 @@ func (ac *AlvuConfig) FlushFiles(files []HookedFile) error {
 			}
 		}
 
-		replaced, _ := ac.injectInSlot(
+		replaced, err := ac.injectInSlot(
 			ac.ReadLayout(),
 			string(hookedFile.content),
 		)
+
+		if err != nil {
+			return err
+		}
 
 		template := templateHTML.New("temporaryTemplate")
 		template = template.Funcs(templateHTML.FuncMap{
@@ -289,6 +303,29 @@ func (ac *AlvuConfig) ReadDir(dir string) (filepaths []string, err error) {
 	return sanitizedCollection, nil
 }
 
+func (ac *AlvuConfig) injectInSlot(htmlString string, replacement string) (string, error) {
+	if hasLegacySlot(htmlString) {
+		return injectInLegacySlot(htmlString, replacement), nil
+	}
+	slotStartPos := strings.Index(htmlString, slotStartTag)
+	slotEndPos := strings.Index(htmlString, slotEndTag)
+	if slotStartPos == -1 && slotEndPos == -1 {
+		return htmlString, nil
+	}
+	baseString := strings.Replace(htmlString, slotEndTag, "", slotEndPos)
+	return strings.Replace(baseString, slotStartTag, replacement, slotStartPos), nil
+}
+
+func (ac *AlvuConfig) StartServer() error {
+	if !ac.Serve {
+		return nil
+	}
+
+	http.Handle("/", http.FileServer(http.Dir(ac.OutDir)))
+	ac.logger.Info(fmt.Sprintf("Starting Server - %v:%v", "http://localhost", ac.PortNumber))
+	return http.ListenAndServe(fmt.Sprintf(":%v", ac.PortNumber), nil)
+}
+
 func recursiveRead(dir string) (filepaths []string, err error) {
 	dirEntry, err := os.ReadDir(
 		dir,
@@ -311,19 +348,6 @@ func recursiveRead(dir string) (filepaths []string, err error) {
 	}
 
 	return
-}
-
-func (ac *AlvuConfig) injectInSlot(htmlString string, replacement string) (string, error) {
-	if hasLegacySlot(htmlString) {
-		return injectInLegacySlot(htmlString, replacement), nil
-	}
-	slotStartPos := strings.Index(htmlString, slotStartTag)
-	slotEndPos := strings.Index(htmlString, slotEndTag)
-	if slotStartPos == -1 && slotEndPos == -1 {
-		return htmlString, nil
-	}
-	baseString := strings.Replace(htmlString, slotEndTag, "", slotEndPos)
-	return strings.Replace(baseString, slotStartTag, replacement, slotStartPos), nil
 }
 
 func hasLegacySlot(htmlString string) bool {

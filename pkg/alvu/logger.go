@@ -17,7 +17,7 @@ func (l *Logger) Debug(msg string) {
 		return
 	}
 	cs := color.ColorString{}
-	cs.Gray(l.logPrefix).Reset(" ").Green("✔").Reset(" ").Green(msg)
+	cs.Gray(l.logPrefix).Reset(" ").Gray("-").Reset(" ").Gray(msg)
 	fmt.Println(cs.String())
 }
 

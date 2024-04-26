@@ -322,9 +322,108 @@ func (ac *AlvuConfig) StartServer() error {
 		return nil
 	}
 
-	http.Handle("/", http.FileServer(http.Dir(ac.OutDir)))
+	normalizedPort := string(ac.PortNumber)
+
+	if !strings.HasPrefix(normalizedPort, ":") {
+		normalizedPort = ":" + normalizedPort
+	}
+
+	http.Handle("/", http.HandlerFunc(ac.ServeHandler))
 	ac.logger.Info(fmt.Sprintf("Starting Server - %v:%v", "http://localhost", ac.PortNumber))
-	return http.ListenAndServe(fmt.Sprintf(":%v", ac.PortNumber), nil)
+
+	err := http.ListenAndServe(normalizedPort, nil)
+	if strings.Contains(err.Error(), "address already in use") {
+		ac.logger.Error("port already in use, use another port with the `-port` flag instead")
+		return err
+	}
+
+	return nil
+}
+
+func (ac *AlvuConfig) ServeHandler(rw http.ResponseWriter, req *http.Request) {
+	path := req.URL.Path
+
+	if path == "/" {
+		path = filepath.Join(ac.OutDir, "index.html")
+		http.ServeFile(rw, req, path)
+		return
+	}
+
+	// check if the requested file already exists
+	file := filepath.Join(ac.OutDir, path)
+	info, err := os.Stat(file)
+
+	// if not, check if it's a directory
+	// and if it's a directory, we look for
+	// a index.html inside the directory to return instead
+	if err == nil {
+		if info.Mode().IsDir() {
+			file = filepath.Join(ac.OutDir, path, "index.html")
+			_, err := os.Stat(file)
+			if err != nil {
+				ac.notFoundHandler(rw, req)
+				return
+			}
+		}
+
+		http.ServeFile(rw, req, file)
+		return
+	}
+
+	// if neither a directory or file was found
+	// try a secondary case where the file might be missing
+	// a `.html` extension for cleaner url so append a .html
+	// to look for the file.
+	if err != nil {
+		file := filepath.Join(ac.OutDir, normalizeStaticLookupPath(path))
+		_, err := os.Stat(file)
+
+		if err != nil {
+			ac.notFoundHandler(rw, req)
+			return
+		}
+
+		http.ServeFile(rw, req, file)
+		return
+	}
+
+	ac.notFoundHandler(rw, req)
+}
+
+func (ac *AlvuConfig) notFoundHandler(w http.ResponseWriter, r *http.Request) {
+	var notFoundPageExists bool
+	filePointer, err := os.Stat(filepath.Join(ac.OutDir, "404.html"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			notFoundPageExists = false
+		}
+	}
+
+	if filePointer.Size() > 0 {
+		notFoundPageExists = true
+	}
+
+	if notFoundPageExists {
+		compiledNotFoundFile := filepath.Join(ac.OutDir, "404.html")
+		notFoundFile, err := os.ReadFile(compiledNotFoundFile)
+		if err != nil {
+			http.Error(w, "404, Page not found....", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(notFoundFile)
+		return
+	}
+
+	http.Error(w, "404, Page not found....", http.StatusNotFound)
+}
+
+func normalizeStaticLookupPath(path string) string {
+	if strings.HasSuffix(path, ".html") {
+		return path
+	}
+	return path + ".html"
 }
 
 func recursiveRead(dir string) (filepaths []string, err error) {

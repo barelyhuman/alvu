@@ -161,6 +161,13 @@ func (h *Hooks) ProcessFile(file transformers.TransformedFile) (hookedFile Hooke
 	fileData, _ := os.ReadFile(file.TransformedFile)
 	hookedFile.content = fileData
 
+	fileTargetName := strings.TrimPrefix(
+		file.SourcePath,
+		filepath.Join(h.ac.RootPath, "pages"),
+	)
+	fileTargetName = filepath.Clean(strings.TrimPrefix(fileTargetName, "/"))
+	fileTargetName = strings.Replace(fileTargetName, filepath.Ext(fileTargetName), ".html", 1)
+
 	hookInput := struct {
 		Name       string `json:"name"`
 		SourcePath string `json:"source_path"`
@@ -169,17 +176,14 @@ func (h *Hooks) ProcessFile(file transformers.TransformedFile) (hookedFile Hooke
 		WriteableContent string `json:"content"`
 		// HTMLContent      string                 `json:"html"`
 	}{
-		Name:             filepath.Clean(strings.TrimPrefix(strings.TrimPrefix(file.SourcePath, filepath.Join(h.ac.RootPath, "pages")), "/")),
-		SourcePath:       file.SourcePath,
-		WriteableContent: string(fileData),
+		Name:       fileTargetName,
+		SourcePath: file.SourcePath,
 	}
-
-	hookJsonInput, _ := json.Marshal(hookInput)
 
 	localCollection := []*HookSource{}
 
-	filePathSplits := strings.Split(file.SourcePath, string(filepath.Separator))
-	nonRootPath := filepath.Join(filePathSplits[1:]...)
+	nonRootPath := strings.TrimPrefix(file.SourcePath, filepath.Join(h.ac.RootPath, "pages"))
+	nonRootPath = strings.TrimPrefix(nonRootPath, "/")
 
 	if len(h.forSpecificFiles[nonRootPath]) > 0 {
 		localCollection = append(localCollection, h.forSpecificFiles[nonRootPath]...)
@@ -193,6 +197,9 @@ func (h *Hooks) ProcessFile(file transformers.TransformedFile) (hookedFile Hooke
 	for i := range localCollection {
 		hook := localCollection[i]
 		hookFunc := hook.luaState.GetGlobal("Writer")
+
+		hookInput.WriteableContent = string(hookedFile.content)
+		hookJsonInput, _ := json.Marshal(hookInput)
 
 		if hookFunc == lua.LNil {
 			continue
@@ -224,6 +231,9 @@ func (h *Hooks) ProcessFile(file transformers.TransformedFile) (hookedFile Hooke
 
 		if fromPlug["transform"] != nil {
 			hookedFile.transform = fmt.Sprintf("%v", fromPlug["transform"])
+		} else {
+			h.ac.logger.Warning("Auto transformation of content returned from the hooks will be removed in v0.3,\n please return a `transform` property from the hooks instead.")
+			hookedFile.transform = ".md"
 		}
 
 		if fromPlug["data"] != nil {

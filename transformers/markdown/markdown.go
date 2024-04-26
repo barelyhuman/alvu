@@ -2,9 +2,11 @@ package markdown
 
 import (
 	"bytes"
+	"fmt"
 	"net/url"
 	"strings"
 
+	"github.com/barelyhuman/go/color"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting"
 	"github.com/yuin/goldmark/ast"
@@ -98,8 +100,15 @@ func (rlr *relativeLinkRewriter) Transform(doc *ast.Document, reader text.Reader
 			return ast.WalkContinue, nil
 		}
 
-		// from root
-		if strings.HasPrefix(validURL.Path, "/") {
+		if strings.HasPrefix(validURL.Path, "{{.Meta.BaseURL}}") {
+			newDestination, _ := url.JoinPath(
+				rlr.baseURL,
+				strings.TrimPrefix(validURL.Path, "{{.Meta.BaseURL}}"),
+			)
+			link.Destination = []byte(newDestination)
+			printMetaLinkWarning()
+		} else if strings.HasPrefix(validURL.Path, "/") {
+			// from root
 			newDestination, _ := url.JoinPath(
 				rlr.baseURL,
 				validURL.Path,
@@ -107,13 +116,14 @@ func (rlr *relativeLinkRewriter) Transform(doc *ast.Document, reader text.Reader
 			link.Destination = []byte(newDestination)
 		}
 
-		// from current file
-		// TODO: add handling for relative
-		// path and then prepend the baseURL
-		if strings.HasPrefix(validURL.Path, "./") {
-
-		}
-
 		return ast.WalkSkipChildren, nil
 	})
+}
+
+// TODO: remove in v0.3
+func printMetaLinkWarning() {
+	warning := "{{.Meta.BaseURL}} is no more needed in markdown files, links will be rewritten automatically.\n Use root first links, eg: pages/docs/some-topic.md would be linked as /docs/some-topic"
+	cs := color.ColorString{}
+	cs.Reset(" ").Yellow(warning)
+	fmt.Println(cs.String())
 }

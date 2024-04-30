@@ -115,6 +115,7 @@ func (ac *AlvuConfig) Build() error {
 
 	pageDir := filepath.Join(ac.RootPath, "pages")
 	publicDir := filepath.Join(ac.RootPath, "public")
+	hooksDir := filepath.Join(ac.RootPath, ac.HookDir)
 
 	filesToProcess, err := ac.ReadDir(pageDir)
 	if err != nil {
@@ -130,6 +131,7 @@ func (ac *AlvuConfig) Build() error {
 
 	ac.watcher.AddDir(pageDir)
 	ac.watcher.AddDir(publicDir)
+	ac.watcher.AddDir(hooksDir)
 
 	normalizedFiles, err := runTransfomers(filesToProcess, ac)
 	if err != nil {

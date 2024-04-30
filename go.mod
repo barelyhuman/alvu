@@ -11,7 +11,7 @@ require (
 	github.com/yuin/goldmark v1.7.1
 	github.com/yuin/goldmark-highlighting v0.0.0-20220208100518-594be1970594
 	github.com/yuin/gopher-lua v1.1.0
-	golang.org/x/net v0.0.0-20200625001655-4c5254603344
+	golang.org/x/net v0.17.0
 	gopkg.in/yaml.v3 v3.0.1
 	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf
 )

@@ -53,32 +53,46 @@ type AlvuConfig struct {
 	logger      Logger
 	hookHandler *Hooks
 	watcher     *Watcher
-	rebuildChan chan bool
+
+	// Internals - Websockets // can be separated
+	shouldRebuild bool
+	rebuildLock   sync.Mutex
+	rebuildCond   *sync.Cond
+	connections   map[*websocket.Conn]struct{}
 }
 
 func (ac *AlvuConfig) Rebuild(path string) {
+	ac.rebuildLock.Lock()
 	ac.logger.Info(fmt.Sprintf("Changed: %v, Recompiling.", path))
 	err := ac.Build()
 	if err != nil {
 		ac.logger.Error(err.Error())
 	}
-	ac.rebuildChan <- true
+	ac.shouldRebuild = true
+	ac.rebuildLock.Unlock()
+	ac.rebuildCond.Broadcast()
 }
 
 func (ac *AlvuConfig) Run() error {
-	ac.rebuildChan = make(chan bool, 1)
 	ac.logger = Logger{
 		logPrefix: "[alvu]",
 	}
 
+	ac.rebuildCond = sync.NewCond(&ac.rebuildLock)
+	ac.connections = make(map[*websocket.Conn]struct{})
+
 	if ac.Serve {
 		ac.watcher = NewWatcher()
 		ac.watcher.logger = ac.logger
+
 		go func(ac *AlvuConfig) {
 			for path := range ac.watcher.recompile {
 				ac.Rebuild(path)
 			}
 		}(ac)
+
+		ac.watcher.Start()
+		ac.monitorRebuilds()
 	}
 
 	err := ac.Build()
@@ -86,16 +100,31 @@ func (ac *AlvuConfig) Run() error {
 		return err
 	}
 
-	if ac.Serve {
-		ac.watcher.Start()
-	}
-
 	return ac.StartServer()
+}
+
+func (ac *AlvuConfig) monitorRebuilds() {
+	go func() {
+		for {
+			ac.rebuildCond.L.Lock()
+			for !ac.shouldRebuild {
+				ac.rebuildCond.Wait()
+			}
+			for conn := range ac.connections {
+				err := websocket.Message.Send(conn, "reload")
+				if err != nil {
+					delete(ac.connections, conn)
+				}
+			}
+			ac.shouldRebuild = false
+			ac.rebuildCond.L.Unlock()
+		}
+	}()
 }
 
 func (ac *AlvuConfig) Build() error {
 	hooksHandler := Hooks{
-		ac: *ac,
+		ac: ac,
 	}
 	ac.hookHandler = &hooksHandler
 
@@ -421,10 +450,16 @@ func (ac *AlvuConfig) StartServer() error {
 // _webSocketHandler Internal function to setup a listener loop
 // for the live reload setup
 func (ac *AlvuConfig) _webSocketHandler(ws *websocket.Conn) {
+	// collect connections
+	ac.connections[ws] = struct{}{}
+
 	defer ws.Close()
-	for range ac.rebuildChan {
-		err := websocket.Message.Send(ws, "reload")
+	// message loop, till connection breaks
+	for {
+		var msg string
+		err := websocket.Message.Receive(ws, &msg)
 		if err != nil {
+			delete(ac.connections, ws)
 			break
 		}
 	}
@@ -554,21 +589,32 @@ func injectInLegacySlot(htmlString string, replacement string) string {
 
 func injectWebsocketConnection(htmlString string, port string) string {
 	return htmlString + fmt.Sprintf(`<script>
-	const socket = new WebSocket("ws://localhost:%v/ws");
-
-	// Connection opened
-	socket.addEventListener("open", (event) => {
-	  socket.send("Hello Server!");
-	});
-
-	// Listen for messages
-	socket.addEventListener("message", (event) => {
-	  if (event.data == "reload") {
-		socket.close();
-		window.location.reload();
-	  }
-	});
-</script>`, port)
+	connect();
+  
+	function connect() {
+	  let socket = new WebSocket("ws://localhost:%v/ws");
+  
+	  // Connection opened
+	  socket.addEventListener("open", (event) => {
+		socket.send("Init");
+	  });
+  
+	  socket.addEventListener("close", (event) => {
+		socket = null;
+		setTimeout(() => {
+		  connect();
+		}, 5000);
+	  });
+  
+	  // Listen for messages
+	  socket.addEventListener("message", (event) => {
+		if (event.data == "reload") {
+		  socket.close();
+		  window.location.reload();
+		}
+	  });
+	}
+  </script>`, port)
 }
 
 func hasKeys(i map[string]interface{}) bool {

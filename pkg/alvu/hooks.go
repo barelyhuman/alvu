@@ -28,7 +28,7 @@ type HookSource struct {
 }
 
 type Hooks struct {
-	ac               AlvuConfig
+	ac               *AlvuConfig
 	collection       []*HookSource
 	forSpecificFiles map[string][]*HookSource
 

@@ -34,7 +34,7 @@ func (p *Watcher) Start() {
 			case evt := <-p.poller.Events:
 				_, err := os.Stat(evt.Path)
 
-				p.logger.Debug(fmt.Sprintf("Change Event: %v", evt))
+				p.logger.Debug(fmt.Sprintf("Change Event: %v", evt.Path))
 
 				// Do nothing if the file doesn't exit, just continue
 				if err != nil {

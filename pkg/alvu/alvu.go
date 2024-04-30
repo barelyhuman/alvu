@@ -13,6 +13,7 @@ import (
 
 	"github.com/barelyhuman/alvu/transformers"
 	"github.com/barelyhuman/alvu/transformers/markdown"
+	"golang.org/x/net/websocket"
 
 	htmlT "github.com/barelyhuman/alvu/transformers/html"
 )
@@ -52,15 +53,20 @@ type AlvuConfig struct {
 	logger      Logger
 	hookHandler *Hooks
 	watcher     *Watcher
+	rebuildChan chan bool
 }
 
 func (ac *AlvuConfig) Rebuild(path string) {
 	ac.logger.Info(fmt.Sprintf("Changed: %v, Recompiling.", path))
 	err := ac.Build()
-	ac.logger.Error(err.Error())
+	if err != nil {
+		ac.logger.Error(err.Error())
+	}
+	ac.rebuildChan <- true
 }
 
 func (ac *AlvuConfig) Run() error {
+	ac.rebuildChan = make(chan bool, 1)
 	ac.logger = Logger{
 		logPrefix: "[alvu]",
 	}
@@ -70,8 +76,7 @@ func (ac *AlvuConfig) Run() error {
 		ac.watcher.logger = ac.logger
 		go func(ac *AlvuConfig) {
 			for path := range ac.watcher.recompile {
-				ac.logger.Info(fmt.Sprintf("Changed: %v, recompiling...", path))
-				ac.Build()
+				ac.Rebuild(path)
 			}
 		}(ac)
 	}
@@ -148,15 +153,26 @@ func (ac *AlvuConfig) Build() error {
 func (ac *AlvuConfig) ReadLayout() string {
 	layoutFilePath := filepath.Join(ac.RootPath, "pages", "_layout.html")
 	fileInfo, err := os.Stat(layoutFilePath)
+	defaultLayout := ""
+
+	if ac.Serve {
+		defaultLayout = injectWebsocketConnection(defaultLayout, ac.PortNumber)
+	}
+
 	if os.IsNotExist(err) {
-		return ""
+		return defaultLayout
 	}
 	if fileInfo.IsDir() {
-		return ""
+		return defaultLayout
 	}
 	data, _ := os.ReadFile(
 		layoutFilePath,
 	)
+
+	if ac.Serve {
+		return injectWebsocketConnection(string(data), ac.PortNumber)
+	}
+
 	return string(data)
 }
 
@@ -359,27 +375,57 @@ func (ac *AlvuConfig) injectInSlot(htmlString string, replacement string) (strin
 	return strings.Replace(baseString, slotStartTag, replacement, slotStartPos), nil
 }
 
+func (ac *AlvuConfig) NormalisePort(port string) string {
+	normalisedPort := port
+
+	if !strings.HasPrefix(normalisedPort, ":") {
+		normalisedPort = ":" + normalisedPort
+	}
+
+	return normalisedPort
+}
+
 func (ac *AlvuConfig) StartServer() error {
 	if !ac.Serve {
 		return nil
 	}
 
-	normalizedPort := string(ac.PortNumber)
+	wsHandler := websocket.Handler(ac._webSocketHandler)
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		// Check the request's 'Upgrade' header to see if it's a WebSocket request
+		if r.Header.Get("Upgrade") != "websocket" {
+			http.Error(w, "Not a WebSocket handshake request", http.StatusBadRequest)
+			return
+		}
 
-	if !strings.HasPrefix(normalizedPort, ":") {
-		normalizedPort = ":" + normalizedPort
-	}
+		// Upgrade the HTTP connection to a WebSocket connection
+		wsHandler.ServeHTTP(w, r)
+	})
+
+	normalisedPort := ac.NormalisePort(ac.PortNumber)
 
 	http.Handle("/", http.HandlerFunc(ac.ServeHandler))
 	ac.logger.Info(fmt.Sprintf("Starting Server - %v:%v", "http://localhost", ac.PortNumber))
 
-	err := http.ListenAndServe(normalizedPort, nil)
+	err := http.ListenAndServe(normalisedPort, nil)
 	if strings.Contains(err.Error(), "address already in use") {
 		ac.logger.Error("port already in use, use another port with the `-port` flag instead")
 		return err
 	}
 
 	return nil
+}
+
+// _webSocketHandler Internal function to setup a listener loop
+// for the live reload setup
+func (ac *AlvuConfig) _webSocketHandler(ws *websocket.Conn) {
+	defer ws.Close()
+	for range ac.rebuildChan {
+		err := websocket.Message.Send(ws, "reload")
+		if err != nil {
+			break
+		}
+	}
 }
 
 func (ac *AlvuConfig) ServeHandler(rw http.ResponseWriter, req *http.Request) {
@@ -502,6 +548,25 @@ func injectInLegacySlot(htmlString string, replacement string) string {
 		return htmlString
 	}
 	return strings.Replace(htmlString, contentTag, replacement, contentTagPos)
+}
+
+func injectWebsocketConnection(htmlString string, port string) string {
+	return htmlString + fmt.Sprintf(`<script>
+	const socket = new WebSocket("ws://localhost:%v/ws");
+
+	// Connection opened
+	socket.addEventListener("open", (event) => {
+	  socket.send("Hello Server!");
+	});
+
+	// Listen for messages
+	socket.addEventListener("message", (event) => {
+	  if (event.data == "reload") {
+		socket.close();
+		window.location.reload();
+	  }
+	});
+</script>`, port)
 }
 
 func hasKeys(i map[string]interface{}) bool {

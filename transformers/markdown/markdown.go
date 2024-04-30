@@ -58,7 +58,6 @@ func (mt *MarkdownTransformer) ExtractMeta(input []byte) (result map[string]inte
 
 	metaParts := bytes.SplitN(content, sep, 3)
 	if len(metaParts) > 2 {
-		fmt.Printf("metaParts: %v\n", metaParts)
 		err = yaml.Unmarshal([]byte(metaParts[1]), &result)
 		if err != nil {
 			return

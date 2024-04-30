@@ -121,7 +121,14 @@ func (rlr *relativeLinkRewriter) Transform(doc *ast.Document, reader text.Reader
 }
 
 // TODO: remove in v0.3
+var _warningPrinted bool = false
+
+// TODO: remove in v0.3
 func printMetaLinkWarning() {
+	if _warningPrinted {
+		return
+	}
+	_warningPrinted = true
 	warning := "{{.Meta.BaseURL}} is no more needed in markdown files, links will be rewritten automatically.\n Use root first links, eg: pages/docs/some-topic.md would be linked as /docs/some-topic"
 	cs := color.ColorString{}
 	cs.Reset(" ").Yellow(warning)

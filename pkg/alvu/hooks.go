@@ -31,6 +31,8 @@ type Hooks struct {
 	ac               AlvuConfig
 	collection       []*HookSource
 	forSpecificFiles map[string][]*HookSource
+
+	_legacyTransformLogSent bool
 }
 
 type HookedFile struct {
@@ -232,7 +234,10 @@ func (h *Hooks) ProcessFile(file transformers.TransformedFile) (hookedFile Hooke
 		if fromPlug["transform"] != nil {
 			hookedFile.transform = fmt.Sprintf("%v", fromPlug["transform"])
 		} else {
-			h.ac.logger.Warning("Auto transformation of content returned from the hooks will be removed in v0.3,\n please return a `transform` property from the hooks instead.")
+			if !h._legacyTransformLogSent {
+				h.ac.logger.Warning("Auto transformation of content returned from the hooks will be removed in v0.3,\n please return a `transform` property from the hooks instead.")
+				h._legacyTransformLogSent = true
+			}
 			hookedFile.transform = ".md"
 		}
 

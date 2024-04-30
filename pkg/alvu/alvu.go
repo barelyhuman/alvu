@@ -51,6 +51,13 @@ type AlvuConfig struct {
 	// Internals
 	logger      Logger
 	hookHandler *Hooks
+	watcher     *Watcher
+}
+
+func (ac *AlvuConfig) Rebuild(path string) {
+	ac.logger.Info(fmt.Sprintf("Changed: %v, Recompiling.", path))
+	err := ac.Build()
+	ac.logger.Error(err.Error())
 }
 
 func (ac *AlvuConfig) Run() error {
@@ -58,6 +65,30 @@ func (ac *AlvuConfig) Run() error {
 		logPrefix: "[alvu]",
 	}
 
+	if ac.Serve {
+		ac.watcher = NewWatcher()
+		ac.watcher.logger = ac.logger
+		go func(ac *AlvuConfig) {
+			for path := range ac.watcher.recompile {
+				ac.logger.Info(fmt.Sprintf("Changed: %v, recompiling...", path))
+				ac.Build()
+			}
+		}(ac)
+	}
+
+	err := ac.Build()
+	if err != nil {
+		return err
+	}
+
+	if ac.Serve {
+		ac.watcher.Start()
+	}
+
+	return ac.StartServer()
+}
+
+func (ac *AlvuConfig) Build() error {
 	hooksHandler := Hooks{
 		ac: *ac,
 	}
@@ -77,17 +108,23 @@ func (ac *AlvuConfig) Run() error {
 		},
 	}
 
-	filesToProcess, err := ac.ReadDir(filepath.Join(ac.RootPath, "pages"))
+	pageDir := filepath.Join(ac.RootPath, "pages")
+	publicDir := filepath.Join(ac.RootPath, "public")
+
+	filesToProcess, err := ac.ReadDir(pageDir)
 	if err != nil {
 		return err
 	}
 
 	ac.logger.Debug(fmt.Sprintf("filesToProcess: %v", filesToProcess))
 
-	publicFiles, err := ac.ReadDir(filepath.Join(ac.RootPath, "public"))
+	publicFiles, err := ac.ReadDir(publicDir)
 	if err != nil {
 		return err
 	}
+
+	ac.watcher.AddDir(pageDir)
+	ac.watcher.AddDir(publicDir)
 
 	normalizedFiles, err := runTransfomers(filesToProcess, ac)
 	if err != nil {
@@ -105,12 +142,7 @@ func (ac *AlvuConfig) Run() error {
 	}
 
 	ac.HandlePublicFiles(publicFiles)
-	err = ac.FlushFiles(processedFiles)
-	if err != nil {
-		return err
-	}
-
-	return ac.StartServer()
+	return ac.FlushFiles(processedFiles)
 }
 
 func (ac *AlvuConfig) ReadLayout() string {

@@ -169,17 +169,19 @@ func (h *Hooks) ProcessFile(file transformers.TransformedFile) (hookedFile Hooke
 	)
 	fileTargetName = filepath.Clean(strings.TrimPrefix(fileTargetName, "/"))
 	fileTargetName = strings.Replace(fileTargetName, filepath.Ext(fileTargetName), ".html", 1)
+	fileTargetName = strings.TrimSpace(fileTargetName)
 
 	hookInput := struct {
 		Name       string `json:"name"`
 		SourcePath string `json:"source_path"`
 		// DestPath         string                 `json:"dest_path"`
-		// Meta             map[string]interface{} `json:"meta"`
-		WriteableContent string `json:"content"`
+		Meta             map[string]interface{} `json:"meta"`
+		WriteableContent string                 `json:"content"`
 		// HTMLContent      string                 `json:"html"`
 	}{
 		Name:       fileTargetName,
 		SourcePath: file.SourcePath,
+		Meta:       file.Meta,
 	}
 
 	localCollection := []*HookSource{}

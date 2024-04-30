@@ -16,6 +16,7 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
+	"gopkg.in/yaml.v3"
 )
 
 type MarkdownTransformer struct {
@@ -30,12 +31,40 @@ func (mt *MarkdownTransformer) TransformContent(input []byte) (result []byte, er
 	mt.EnsureProcessor()
 
 	var buffer bytes.Buffer
-	err = mt.processor.Convert(input, &buffer)
+	_, content, err := mt.ExtractMeta(input)
+
+	if err != nil {
+		return
+	}
+
+	err = mt.processor.Convert(content, &buffer)
 	if err != nil {
 		return
 	}
 
 	result = buffer.Bytes()
+	return
+}
+
+func (mt *MarkdownTransformer) ExtractMeta(input []byte) (result map[string]interface{}, content []byte, err error) {
+	result = map[string]interface{}{}
+	sep := []byte("---")
+
+	content = input
+
+	if !bytes.HasPrefix(input, sep) {
+		return
+	}
+
+	metaParts := bytes.SplitN(content, sep, 3)
+	if len(metaParts) > 2 {
+		fmt.Printf("metaParts: %v\n", metaParts)
+		err = yaml.Unmarshal([]byte(metaParts[1]), &result)
+		if err != nil {
+			return
+		}
+		content = metaParts[2]
+	}
 	return
 }
 

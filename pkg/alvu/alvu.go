@@ -299,23 +299,33 @@ func runTransfomers(filesToProcess []string, ac *AlvuConfig) ([]transformers.Tra
 		}
 
 		originalContent, err := os.ReadFile(fileToNormalize)
+		mutableContent := originalContent
 		if err != nil {
 			return nil, fmt.Errorf("failed to read file %v with error %v", fileToNormalize, err)
 		}
 
+		var meta map[string]interface{}
 		for _, transformer := range ac.Transformers[extension] {
-			nextContent, err := transformer.TransformContent(originalContent)
+			nextContent, err := transformer.TransformContent(mutableContent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to transform file: %v, with error: %v", fileToNormalize, err)
 			}
-			originalContent = nextContent
+			newMeta, _, _ := transformer.ExtractMeta(originalContent)
+			if err != nil {
+				return nil, fmt.Errorf("failed to extract meta from file: %v, with error: %v", fileToNormalize, err)
+			}
+			if hasKeys(newMeta) {
+				meta = newMeta
+			}
+			mutableContent = nextContent
 		}
 
-		transformedFile, err := ac.createTransformedFile(fileToNormalize, string(originalContent))
+		transformedFile, err := ac.createTransformedFile(fileToNormalize, string(mutableContent))
 		if err != nil {
 			return nil, fmt.Errorf("failed to transform file: %v, with error: %v", fileToNormalize, err)
 		}
 
+		transformedFile.Meta = meta
 		normalizedFiles = append(normalizedFiles, transformedFile)
 	}
 	return normalizedFiles, nil
@@ -492,4 +502,12 @@ func injectInLegacySlot(htmlString string, replacement string) string {
 		return htmlString
 	}
 	return strings.Replace(htmlString, contentTag, replacement, contentTagPos)
+}
+
+func hasKeys(i map[string]interface{}) bool {
+	keys := make([]string, 0, len(i))
+	for k := range i {
+		keys = append(keys, k)
+	}
+	return len(keys) > 0
 }

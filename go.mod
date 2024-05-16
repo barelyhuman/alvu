@@ -3,7 +3,7 @@ module github.com/barelyhuman/alvu
 go 1.18
 
 require (
-	github.com/barelyhuman/go v0.2.2
+	github.com/barelyhuman/go v0.2.3-0.20240516192751-30a6c804e4e5
 	github.com/cjoudrey/gluahttp v0.0.0-20201111170219-25003d9adfa9
 	github.com/joho/godotenv v1.5.1
 	github.com/urfave/cli/v2 v2.27.1

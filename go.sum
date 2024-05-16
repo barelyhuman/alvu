@@ -9,8 +9,8 @@ github.com/alecthomas/units v0.0.0-20190717042225-c3de453c63f4/go.mod h1:ybxpYRF
 github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d/go.mod h1:rBZYJk541a8SKzHPHnH3zbiI+7dagKZ0cgpgrD7Fyho=
 github.com/alessio/shellescape v1.4.1/go.mod h1:PZAiSCk0LJaZkiCSkPv8qIobYglO3FPpyFjDCtHLS30=
 github.com/aws/aws-sdk-go v1.34.0/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZveU8YkpAk0=
-github.com/barelyhuman/go v0.2.2 h1:Lpk1XrlP40F3II8BibVzViZUOJ1GgDdzXUBb8ENwb0U=
-github.com/barelyhuman/go v0.2.2/go.mod h1:hox2iDYZAarjpS7jKQeYIi2F+qMA8KLMtCws++L2sSY=
+github.com/barelyhuman/go v0.2.3-0.20240516192751-30a6c804e4e5 h1:AbJ6ZaRkEc6CguQ6rXe0epKmFe/TmwSSFX5N6hsNO+A=
+github.com/barelyhuman/go v0.2.3-0.20240516192751-30a6c804e4e5/go.mod h1:hox2iDYZAarjpS7jKQeYIi2F+qMA8KLMtCws++L2sSY=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=

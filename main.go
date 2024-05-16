@@ -72,6 +72,24 @@ func main() {
 		Version:     version,
 		Compiled:    time.Now(),
 		HideVersion: false,
+		Commands: []*cli.Command{
+			{
+				Name:        "init",
+				Description: "Initialise a new alvu Project",
+				Args:        true,
+				ArgsUsage:   "<directory>",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:    "force",
+						Aliases: []string{"f"},
+						Usage:   "Force create in the directory even overwriting any files that exist",
+					},
+				},
+				Action: func(ctx *cli.Context) error {
+					return commands.AlvuInit(ctx)
+				},
+			},
+		},
 	}
 
 	err := app.Run(os.Args)

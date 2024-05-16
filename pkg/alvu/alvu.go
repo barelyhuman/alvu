@@ -74,9 +74,8 @@ func (ac *AlvuConfig) Rebuild(path string) {
 }
 
 func (ac *AlvuConfig) Run() error {
-	ac.logger = Logger{
-		logPrefix: "[alvu]",
-	}
+	ac.logger = NewLogger()
+	ac.logger.LogPrefix = "[alvu]"
 
 	ac.rebuildCond = sync.NewCond(&ac.rebuildLock)
 	ac.connections = make(map[*websocket.Conn]struct{})
@@ -158,9 +157,11 @@ func (ac *AlvuConfig) Build() error {
 		return err
 	}
 
-	ac.watcher.AddDir(pageDir)
-	ac.watcher.AddDir(publicDir)
-	ac.watcher.AddDir(hooksDir)
+	if ac.Serve {
+		ac.watcher.AddDir(pageDir)
+		ac.watcher.AddDir(publicDir)
+		ac.watcher.AddDir(hooksDir)
+	}
 
 	normalizedFiles, err := runTransfomers(filesToProcess, ac)
 	if err != nil {

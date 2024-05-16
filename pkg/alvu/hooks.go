@@ -3,6 +3,7 @@ package alvu
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
@@ -52,13 +53,20 @@ func (h *Hooks) Load() {
 		if os.IsNotExist(err) {
 			return
 		}
+
 		readHookDirError(err, hookDir, h.ac.logger)
 	}
 
 	file, err := os.Open(hookDir)
 	readHookDirError(err, hookDir, h.ac.logger)
 	childs, err := file.Readdirnames(1)
-	readHookDirError(err, hookDir, h.ac.logger)
+	if err != nil {
+		if err == io.EOF {
+			return
+		}
+		readHookDirError(err, hookDir, h.ac.logger)
+	}
+
 	if len(childs) == 0 {
 		return
 	}

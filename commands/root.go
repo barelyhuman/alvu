@@ -1,11 +1,20 @@
 package commands
 
 import (
+	"os"
+
 	"github.com/barelyhuman/alvu/pkg/alvu"
+	"github.com/joho/godotenv"
 	"github.com/urfave/cli/v2"
 )
 
 func Alvu(c *cli.Context) (err error) {
+	// Prepare Environment
+	envFilePath := c.String("env")
+	if _, err := os.Stat(envFilePath); err == nil {
+		godotenv.Load(envFilePath)
+	}
+
 	baseConfig := alvu.AlvuConfig{}
 
 	// Basics

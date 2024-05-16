@@ -63,6 +63,11 @@ func main() {
 				Value: 1000,
 			},
 			&cli.StringFlag{
+				Name:  "env",
+				Usage: "Environment File to consider",
+				Value: ".env",
+			},
+			&cli.StringFlag{
 				Name:    "port",
 				Usage:   "port to use for serving the application",
 				Value:   "3000",

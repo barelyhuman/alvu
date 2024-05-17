@@ -1,4 +1,3 @@
-
 .PHONY.: all
 
 all: clean build
@@ -16,7 +15,7 @@ docs: build
 	./alvu --path="docs" --baseurl="/alvu/" --highlight --hard-wrap=false
 
 docs_dev: build
-	./alvu --highlight --hard-wrap=false --serve --path='./docs'
+	DEBUG=true ./alvu --highlight --hard-wrap=false --serve --path='./docs'
 
 pages: docs
 	rm -rf alvu

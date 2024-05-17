@@ -47,7 +47,7 @@ can be defined as shown below
 <html lang="en">
   <head></head>
   <body>
-     { { .Content } }
+     <slot></slot>
   </body>
 </html>
 ```

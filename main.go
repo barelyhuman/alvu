@@ -28,7 +28,6 @@ import (
 	ghttp "github.com/cjoudrey/gluahttp"
 
 	"github.com/barelyhuman/go/color"
-	cp "github.com/otiai10/copy"
 
 	stringsLib "github.com/vadv/gopher-lua-libs/strings"
 
@@ -127,7 +126,7 @@ func (al *Alvu) CopyPublic() {
 	// copy public to out
 	_, err := os.Stat(al.publicPath)
 	if err == nil {
-		err = cp.Copy(al.publicPath, outPath)
+		err = copyDir(al.publicPath, outPath)
 		if err != nil {
 			bail(err)
 		}
@@ -888,7 +887,7 @@ func normalizeFilePath(path string) string {
 	return path + ".html"
 }
 
-func notFoundHandler(w http.ResponseWriter, r *http.Request) {
+func notFoundHandler(w http.ResponseWriter, _ *http.Request) {
 	if notFoundPageExists {
 		compiledNotFoundFile := filepath.Join(outPath, "404.html")
 		notFoundFile, err := os.ReadFile(compiledNotFoundFile)
@@ -1040,4 +1039,45 @@ func _injectLiveReload(layoutHTML *string) string {
 					}
 				  });
 			</script>`
+}
+
+// Recursively copy files from a directory to
+// another directory.
+// The files copied are overwritten on the dest
+func copyDir(src string, dest string) error {
+	err := os.MkdirAll(dest, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	dirEntries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, s := range dirEntries {
+		if s.IsDir() {
+			if err := os.MkdirAll(filepath.Join(dest, s.Name()), os.ModePerm); err != nil {
+				return err
+			}
+			err := copyDir(path.Join(src, s.Name()), filepath.Join(dest, s.Name()))
+			if err != nil {
+				return err
+			}
+		} else {
+			dest, err := os.OpenFile(filepath.Join(dest, s.Name()), os.O_CREATE|os.O_WRONLY, os.ModePerm)
+			if err != nil {
+				return err
+			}
+			src, err := os.OpenFile(filepath.Join(src, s.Name()), os.O_RDONLY, os.ModePerm)
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(dest, src)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

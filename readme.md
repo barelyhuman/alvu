@@ -9,7 +9,7 @@
 - You'll need `curl` installed on your system
 
 ```sh
-curl -sf https://goblin.barelyhuman.xyz/github.com/barelyhuman/alvu | sh
+curl -sf https://goblin.run/github.com/barelyhuman/alvu | sh
 ```
 
 #### From Source / Language tools

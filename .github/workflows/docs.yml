@@ -1,19 +1,44 @@
 name: Docs
 on: [push]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   build-docs:
     concurrency: ci-${{ github.ref }}
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout 🛎️
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
 
       - name: Install and Build
         run: make docs
 
-      - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@v4.3.3
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          token: ${{ secrets.GH_TOKEN }}
-          branch: gh-pages
-          folder: dist
+          path: ./dist
+    
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build-docs
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

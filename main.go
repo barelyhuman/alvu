@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -167,15 +166,15 @@ func main() {
 	}
 
 	baseurl = *baseurlFlag
-	basePath = path.Join(*basePathFlag)
-	pagesPath := path.Join(*basePathFlag, "pages")
-	publicPath := path.Join(*basePathFlag, "public")
-	headFilePath := path.Join(pagesPath, "_head.html")
-	baseFilePath := path.Join(pagesPath, "_layout.html")
-	tailFilePath := path.Join(pagesPath, "_tail.html")
-	notFoundFilePath := path.Join(pagesPath, "404.html")
-	outPath = path.Join(*outPathFlag)
-	hooksPath := path.Join(*basePathFlag, *hooksPathFlag)
+	basePath = filepath.Join(*basePathFlag)
+	pagesPath := filepath.Join(*basePathFlag, "pages")
+	publicPath := filepath.Join(*basePathFlag, "public")
+	headFilePath := filepath.Join(pagesPath, "_head.html")
+	baseFilePath := filepath.Join(pagesPath, "_layout.html")
+	tailFilePath := filepath.Join(pagesPath, "_tail.html")
+	notFoundFilePath := filepath.Join(pagesPath, "404.html")
+	outPath = filepath.Join(*outPathFlag)
+	hooksPath := filepath.Join(*basePathFlag, *hooksPathFlag)
 	hardWraps = *hardWrapsFlag
 
 	headTailDeprecationWarning := color.ColorString{}
@@ -294,7 +293,7 @@ func main() {
 
 		// If serving, also add the nested path into it
 		if *serveFlag {
-			watcher.AddDir(path.Dir(alvuFile.sourcePath))
+			watcher.AddDir(filepath.Dir(alvuFile.sourcePath))
 		}
 	}
 
@@ -347,7 +346,7 @@ func CollectFilesToProcess(basepath string) []string {
 	}
 
 	for _, pathInfo := range pathstoprocess {
-		_path := path.Join(basepath, pathInfo.Name())
+		_path := filepath.Join(basepath, pathInfo.Name())
 
 		if Contains(layoutFiles, pathInfo.Name()) {
 			continue
@@ -378,7 +377,7 @@ func CollectHooks(basePath, hooksBasePath string) {
 			continue
 		}
 		hook := NewHook()
-		hookPath := path.Join(hooksBasePath, pathInfo.Name())
+		hookPath := filepath.Join(hooksBasePath, pathInfo.Name())
 		if err := hook.DoFile(hookPath); err != nil {
 			panic(err)
 		}
@@ -609,7 +608,17 @@ func (af *AlvuFile) FlushFile() {
 	destFolder := filepath.Dir(af.destPath)
 	os.MkdirAll(destFolder, os.ModePerm)
 
-	targetFile := strings.Replace(path.Join(af.destPath), af.name, string(af.targetName), 1)
+	justFileName := strings.TrimSuffix(
+		filepath.Base(af.destPath),
+		filepath.Ext(af.destPath),
+	)
+
+	targetFile := strings.Replace(filepath.Join(af.destPath), af.name, string(af.targetName), 1)
+	if justFileName != "index" && justFileName != "404" {
+		targetFile = filepath.Join(filepath.Dir(af.destPath), justFileName, "index.html")
+		os.MkdirAll(filepath.Dir(targetFile), os.ModePerm)
+	}
+
 	onDebug(func() {
 		debugInfo("flushing for file: " + af.name + string(af.targetName))
 		debugInfo("flusing file: " + targetFile)
@@ -692,7 +701,7 @@ func (af *AlvuFile) FlushFile() {
 		debugInfo("template path: %v", af.sourcePath)
 	})
 
-	t := template.New(path.Join(af.sourcePath))
+	t := template.New(filepath.Join(af.sourcePath))
 	t.Parse(string(data))
 
 	f.Seek(0, 0)
@@ -1060,7 +1069,7 @@ func copyDir(src string, dest string) error {
 			if err := os.MkdirAll(filepath.Join(dest, s.Name()), os.ModePerm); err != nil {
 				return err
 			}
-			err := copyDir(path.Join(src, s.Name()), filepath.Join(dest, s.Name()))
+			err := copyDir(filepath.Join(src, s.Name()), filepath.Join(dest, s.Name()))
 			if err != nil {
 				return err
 			}

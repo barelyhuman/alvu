@@ -65,8 +65,16 @@ func getFilesIndex(pathToIndex string) (paths []string, err error) {
 	}
 
 	for _, f := range files {
+		fullPath := path.Join(pathToIndex, f.Name())
+		info, lerr := os.Lstat(fullPath)
+		if lerr != nil {
+			return paths, lerr
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			continue
+		}
 		if f.IsDir() {
-			nestPath := path.Join(pathToIndex, f.Name())
+			nestPath := fullPath
 			nestPaths, err := getFilesIndex(nestPath)
 			if err != nil {
 				return paths, err

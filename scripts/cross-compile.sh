@@ -17,7 +17,7 @@ build_commands=('
 
 # run a docker container with osxcross and cross compile everything
 docker run -it --rm -v $(pwd):/usr/local/src -w /usr/local/src \
-	golang:alpine3.16 \
+	golang:1.24-alpine3.22 \
 	sh -c "$build_commands"
 
 # create archives

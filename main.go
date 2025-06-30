@@ -197,7 +197,7 @@ func main() {
 		debugInfo("Opening _head")
 		memuse()
 	})
-	headFileFd, err := os.Open(headFilePath)
+	_, err := os.Open(headFilePath)
 	if err != nil {
 		if err == fs.ErrNotExist {
 			log.Println("no _head.html found,skipping")
@@ -210,7 +210,7 @@ func main() {
 		debugInfo("Opening _layout")
 		memuse()
 	})
-	baseFileFd, err := os.Open(baseFilePath)
+	_, err = os.Open(baseFilePath)
 	if err != nil {
 		if err == fs.ErrNotExist {
 			log.Println("no _layout.html found,skipping")
@@ -221,7 +221,7 @@ func main() {
 		debugInfo("Opening _tail")
 		memuse()
 	})
-	tailFileFd, err := os.Open(tailFilePath)
+	_, err = os.Open(tailFilePath)
 	if err != nil {
 		if err == fs.ErrNotExist {
 			log.Println("no _tail.html found, skipping")
@@ -269,6 +269,9 @@ func main() {
 		debugInfo("Creating Alvu Files")
 		memuse()
 	})
+	headContent, _ := os.ReadFile(headFilePath)
+	tailContent, _ := os.ReadFile(tailFilePath)
+	baseTemplateData, _ := os.ReadFile(baseFilePath)
 	for _, toProcessItem := range toProcess {
 		fileName := strings.Replace(toProcessItem, pagesPath, "", 1)
 		fileName = prefixSlashPath.ReplaceAllString(fileName, "")
@@ -276,17 +279,17 @@ func main() {
 		isHTML := strings.HasSuffix(fileName, ".html")
 
 		alvuFile := &AlvuFile{
-			lock:         &sync.Mutex{},
-			sourcePath:   toProcessItem,
-			hooks:        hookCollection,
-			destPath:     destFilePath,
-			name:         fileName,
-			isHTML:       isHTML,
-			headFile:     headFileFd,
-			tailFile:     tailFileFd,
-			baseTemplate: baseFileFd,
-			data:         map[string]interface{}{},
-			extras:       map[string]interface{}{},
+			lock:             &sync.Mutex{},
+			sourcePath:       toProcessItem,
+			hooks:            hookCollection,
+			destPath:         destFilePath,
+			name:             fileName,
+			isHTML:           isHTML,
+			headContent:      headContent,
+			tailContent:      tailContent,
+			baseTemplateData: baseTemplateData,
+			data:             map[string]interface{}{},
+			extras:           map[string]interface{}{},
 		}
 
 		alvuApp.AddFile(alvuFile)
@@ -461,9 +464,9 @@ type AlvuFile struct {
 	meta             map[string]interface{}
 	content          []byte
 	writeableContent []byte
-	headFile         *os.File
-	tailFile         *os.File
-	baseTemplate     *os.File
+	headContent      []byte
+	tailContent      []byte
+	baseTemplateData []byte
 	targetName       []byte
 	data             map[string]interface{}
 	extras           map[string]interface{}
@@ -630,12 +633,12 @@ func (af *AlvuFile) FlushFile() {
 
 	writeHeadTail := false
 
-	if af.baseTemplate == nil && (filepath.Ext(af.sourcePath) == ".md" || filepath.Ext(af.sourcePath) == "html") {
+	if len(af.baseTemplateData) == 0 && (filepath.Ext(af.sourcePath) == ".md" || filepath.Ext(af.sourcePath) == "html") {
 		writeHeadTail = true
 	}
 
-	if writeHeadTail && af.headFile != nil {
-		shouldCopyContentsWithReset(af.headFile, f)
+	if writeHeadTail && af.headContent != nil {
+		f.Write(af.headContent)
 	}
 
 	renderData := PageRenderData{
@@ -675,8 +678,8 @@ func (af *AlvuFile) FlushFile() {
 
 	layout := template.New("layout")
 	var layoutTemplateData string
-	if af.baseTemplate != nil {
-		layoutTemplateData = string(readFileToBytes(af.baseTemplate))
+	if len(af.baseTemplateData) > 0 {
+		layoutTemplateData = string(af.baseTemplateData)
 	} else {
 		layoutTemplateData = `<body>{{.Content}}</body>`
 	}
@@ -690,8 +693,8 @@ func (af *AlvuFile) FlushFile() {
 		f, &toHtml,
 	)
 
-	if writeHeadTail && af.tailFile != nil && af.baseTemplate == nil {
-		shouldCopyContentsWithReset(af.tailFile, f)
+	if writeHeadTail && af.tailContent != nil && len(af.baseTemplateData) == 0 {
+		f.Write(af.tailContent)
 	}
 
 	data, err := os.ReadFile(targetFile)

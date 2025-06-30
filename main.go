@@ -514,6 +514,9 @@ func (af *AlvuFile) ParseMeta() error {
 	}
 
 	metaParts := bytes.SplitN(af.content, sep, 3)
+	if len(metaParts) < 3 {
+		return fmt.Errorf("malformed frontmatter: expected YAML block between '---' markers")
+	}
 
 	var meta map[string]interface{}
 	err := yaml.Unmarshal([]byte(metaParts[1]), &meta)

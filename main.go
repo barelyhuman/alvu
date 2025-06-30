@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"html/template"
 	textTmpl "text/template"
-
 	"io"
 	"io/fs"
 	"log"
@@ -928,6 +927,7 @@ type Watcher struct {
 	alvu   *Alvu
 	poller *poller.Poller
 	dirs   []string
+	dirsMu sync.Mutex
 }
 
 func NewWatcher(alvu *Alvu, interval int) *Watcher {
@@ -940,7 +940,8 @@ func NewWatcher(alvu *Alvu, interval int) *Watcher {
 }
 
 func (w *Watcher) AddDir(dirPath string) {
-
+	w.dirsMu.Lock()
+	defer w.dirsMu.Unlock()
 	for _, pth := range w.dirs {
 		if pth == dirPath {
 			return

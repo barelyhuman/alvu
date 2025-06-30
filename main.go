@@ -1074,15 +1074,18 @@ func copyDir(src string, dest string) error {
 				return err
 			}
 		} else {
-			dest, err := os.OpenFile(filepath.Join(dest, s.Name()), os.O_CREATE|os.O_WRONLY, os.ModePerm)
+			destFile, err := os.OpenFile(filepath.Join(dest, s.Name()), os.O_CREATE|os.O_WRONLY, os.ModePerm)
 			if err != nil {
 				return err
 			}
-			src, err := os.OpenFile(filepath.Join(src, s.Name()), os.O_RDONLY, os.ModePerm)
+			srcFile, err := os.OpenFile(filepath.Join(src, s.Name()), os.O_RDONLY, os.ModePerm)
 			if err != nil {
+				destFile.Close()
 				return err
 			}
-			_, err = io.Copy(dest, src)
+			_, err = io.Copy(destFile, srcFile)
+			srcFile.Close()
+			destFile.Close()
 			if err != nil {
 				return err
 			}

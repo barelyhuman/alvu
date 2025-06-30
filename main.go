@@ -629,7 +629,16 @@ func (af *AlvuFile) FlushFile() {
 
 	f, err := os.Create(targetFile)
 	bail(err)
-	defer f.Sync()
+	defer func() {
+		err := f.Sync()
+		if err != nil {
+			bail(err)
+		}
+		err = f.Close()
+		if err != nil {
+			bail(err)
+		}
+	}()
 
 	writeHeadTail := false
 

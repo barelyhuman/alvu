@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	textTmpl "text/template"
 	"io"
 	"io/fs"
 	"log"
@@ -18,6 +17,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	textTmpl "text/template"
 
 	_ "embed"
 
@@ -695,7 +695,6 @@ func (af *AlvuFile) FlushFile() {
 		layoutTemplateData = `<body>{{.Content}}</body>`
 	}
 
-	layoutTemplateData = _injectLiveReload(&layoutTemplateData)
 	toHtml.Reset()
 	layout.Parse(layoutTemplateData)
 	layout.Execute(&toHtml, layoutData)
@@ -719,9 +718,16 @@ func (af *AlvuFile) FlushFile() {
 	t.Parse(string(data))
 
 	f.Seek(0, 0)
+	f.Truncate(0)
 
 	err = t.Execute(f, renderData)
 	bail(err)
+
+	// inject live reload script if serve flag is enabled
+	if *serveFlag {
+		liveReloadScript := _getLiveReloadScript()
+		f.WriteString(liveReloadScript)
+	}
 }
 
 func NewHook() *lua.LState {
@@ -1044,11 +1050,8 @@ func (w *Watcher) StartWatching() {
 	}()
 }
 
-func _injectLiveReload(layoutHTML *string) string {
-	if !*serveFlag {
-		return *layoutHTML
-	}
-	return *layoutHTML + `<script>
+func _getLiveReloadScript() string {
+	return `<script>
 				  const socket = new WebSocket("ws://localhost:3000/ws");
 
 				  // Connection opened

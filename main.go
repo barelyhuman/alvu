@@ -36,7 +36,7 @@ import (
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
 
-	highlighting "github.com/yuin/goldmark-highlighting"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 
 	lua "github.com/yuin/gopher-lua"
 	"gopkg.in/yaml.v3"
@@ -996,7 +996,7 @@ func (w *Watcher) RebuildFile(filePath string) {
 }
 
 func (w *Watcher) StartWatching() {
-	go w.poller.StartPoller()
+	w.poller.Start()
 	go func() {
 		for {
 			select {
